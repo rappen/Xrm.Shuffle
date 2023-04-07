@@ -5,13 +5,13 @@ VisualStudioVersion = 17.5.33516.290
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Innofactor.Crm.XTB.Shuffle", "XTB\Innofactor.Crm.XTB.Shuffle.csproj", "{13AE5564-5C72-4A70-8AC5-00D227E8200A}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "modules", "modules", "{CAA30CCF-FF3D-420C-86CC-EAFCBC878654}"
-EndProject
-Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "Innofactor.Xrm.Utils.Common", "modules\Xrm.Utils\Innofactor.Xrm.Utils.Common\Innofactor.Xrm.Utils.Common.shproj", "{6B4F59AE-7903-47B0-B888-B7B2EAD40B2C}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "shared", "shared", "{44DE50B5-DA2B-4BD6-9D10-8BB345F68226}"
 EndProject
-Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "Innofactor.Crm.Shuffle", "shared\Innofactor.Crm.Shuffle\Innofactor.Crm.Shuffle.shproj", "{5C10BFE2-AFAA-4B01-A570-B30EF41DE1F0}"
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "Xrm.Shuffle.Core", "shared\Innofactor.Crm.Shuffle\Xrm.Shuffle.Core.shproj", "{5C10BFE2-AFAA-4B01-A570-B30EF41DE1F0}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "submodules", "submodules", "{17CCEFED-E37B-47CF-BD9F-E7596E65FCE9}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "Innofactor.Xrm.Utils.Common", "Xrm.Utils.Core\Innofactor.Xrm.Utils.Common\Innofactor.Xrm.Utils.Common.shproj", "{A939CF3B-672A-4F68-8E6A-89EFE8C8CFBB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -28,16 +28,16 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{6B4F59AE-7903-47B0-B888-B7B2EAD40B2C} = {CAA30CCF-FF3D-420C-86CC-EAFCBC878654}
 		{5C10BFE2-AFAA-4B01-A570-B30EF41DE1F0} = {44DE50B5-DA2B-4BD6-9D10-8BB345F68226}
+		{A939CF3B-672A-4F68-8E6A-89EFE8C8CFBB} = {17CCEFED-E37B-47CF-BD9F-E7596E65FCE9}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {ED295346-E5B5-4006-855E-1100CEB0F456}
 	EndGlobalSection
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
-		modules\Xrm.Utils\Innofactor.Xrm.Utils.Common\Innofactor.Xrm.Utils.Common.projitems*{13ae5564-5c72-4a70-8ac5-00d227e8200a}*SharedItemsImports = 4
 		shared\Innofactor.Crm.Shuffle\Innofactor.Crm.Shuffle.projitems*{13ae5564-5c72-4a70-8ac5-00d227e8200a}*SharedItemsImports = 4
+		Xrm.Utils.Core\Innofactor.Xrm.Utils.Common\Innofactor.Xrm.Utils.Common.projitems*{13ae5564-5c72-4a70-8ac5-00d227e8200a}*SharedItemsImports = 4
 		shared\Innofactor.Crm.Shuffle\Innofactor.Crm.Shuffle.projitems*{5c10bfe2-afaa-4b01-a570-b30ef41de1f0}*SharedItemsImports = 13
-		modules\Xrm.Utils\Innofactor.Xrm.Utils.Common\Innofactor.Xrm.Utils.Common.projitems*{6b4f59ae-7903-47b0-b888-b7b2ead40b2c}*SharedItemsImports = 13
+		Xrm.Utils.Core\Innofactor.Xrm.Utils.Common\Innofactor.Xrm.Utils.Common.projitems*{a939cf3b-672a-4f68-8e6a-89efe8c8cfbb}*SharedItemsImports = 13
 	EndGlobalSection
 EndGlobal

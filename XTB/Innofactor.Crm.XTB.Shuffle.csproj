@@ -412,7 +412,7 @@
     <Folder Include="Resources\" />
   </ItemGroup>
   <Import Project="..\shared\Innofactor.Crm.Shuffle\Innofactor.Crm.Shuffle.projitems" Label="Shared" />
-  <Import Project="..\modules\Xrm.Utils\Innofactor.Xrm.Utils.Common\Innofactor.Xrm.Utils.Common.projitems" Label="Shared" />
+  <Import Project="..\Xrm.Utils.Core\Innofactor.Xrm.Utils.Common\Innofactor.Xrm.Utils.Common.projitems" Label="Shared" />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>ilmerge.exe /target:library /targetplatform:v4,"C:\Windows\Microsoft.NET\Framework\v4.0.30319" "/out:.\Innofactor.Crm.XTB.Shuffle.dll" ".\$(TargetFileName)" "Ionic.Zip.dll"
