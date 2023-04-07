@@ -1,9 +1,9 @@
 ﻿namespace Cinteros.Crm.Utils.Shuffle
 {
     using Cinteros.Crm.Utils.Shuffle.Types;
-    using Innofactor.Xrm.Utils.Common.Extensions;
-    using Innofactor.Xrm.Utils.Common.Interfaces;
-    using Innofactor.Xrm.Utils.Common.Misc;
+    using global::Xrm.Utils.Core.Common.Extensions;
+    using global::Xrm.Utils.Core.Common.Interfaces;
+    using global::Xrm.Utils.Core.Common.Misc;
     using Ionic.Zip;
     using Microsoft.Crm.Sdk.Messages;
     using Microsoft.Xrm.Sdk;

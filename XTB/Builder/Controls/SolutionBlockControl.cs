@@ -1,9 +1,9 @@
-﻿using Innofactor.Xrm.Utils.Common.Extensions;
+﻿using Xrm.Utils.Core.Common.Extensions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace Innofactor.Crm.Shuffle.Builder.Controls
+namespace Rappen.XTB.Shuffle.Builder.Controls
 {
     public partial class SolutionBlockControl : ControlBase
     {

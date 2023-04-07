@@ -1,5 +1,5 @@
 ﻿using Cinteros.Crm.Utils.Shuffle;
-using Innofactor.Crm.Shuffle.Builder.AppCode;
+using Rappen.XTB.Shuffle.Builder.AppCode;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,7 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
 
-namespace Innofactor.Crm.Shuffle.Builder.Controls
+namespace Rappen.XTB.Shuffle.Builder.Controls
 {
     public partial class ControlBase : UserControl
     {

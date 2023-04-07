@@ -1,6 +1,6 @@
-﻿namespace Innofactor.Crm.Shuffle.Runner
+﻿namespace Rappen.XTB.Shuffle.Runner
 {
-    using Innofactor.Crm.Shuffle.XTB;
+    using Rappen.XTB.Shuffle.XTB;
     using System.ComponentModel.Composition;
     using XrmToolBox.Extensibility;
     using XrmToolBox.Extensibility.Interfaces;

@@ -1,9 +1,9 @@
 ﻿namespace Cinteros.Crm.Utils.Shuffle
 {
     using Cinteros.Crm.Utils.Shuffle.Types;
-    using Innofactor.Xrm.Utils.Common.Extensions;
-    using Innofactor.Xrm.Utils.Common.Interfaces;
-    using Innofactor.Xrm.Utils.Common.Misc;
+    using global::Xrm.Utils.Core.Common.Extensions;
+    using global::Xrm.Utils.Core.Common.Interfaces;
+    using global::Xrm.Utils.Core.Common.Misc;
     using Microsoft.Crm.Sdk.Messages;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Query;
@@ -463,10 +463,10 @@
                             {
                                 intersect = cdEntity.LogicalName;
                             }
-                     
+
                             var ref1 = GetAttributeEntityReference(cdEntity.Attributes.ElementAt(0));
                             var ref2 = GetAttributeEntityReference(cdEntity.Attributes.ElementAt(1));
-                           
+
                             var party1 = new Entity(ref1.LogicalName, ref1.Id); //Entity.InitFromNameAndId(ref1.LogicalName, ref1.Id, crmsvc, log);
                             var party2 = new Entity(ref2.LogicalName, ref2.Id); //Entity.InitFromNameAndId(ref2.LogicalName, ref2.Id, crmsvc, log);
                             try
@@ -613,7 +613,6 @@
                         {
                             recordSaved = false;
                             SendLine(container, "{0:000} Update Failed: {1} {2} {3}", pos, identifier, cdNewEntity.LogicalName);
-
                         }
                     }
                     else

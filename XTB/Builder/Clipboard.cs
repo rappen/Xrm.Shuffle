@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace Innofactor.Crm.Shuffle.Builder.AppCode
+namespace Rappen.XTB.Shuffle.Builder.AppCode
 {
     /// <summary>
     /// Clipboard to manage Treeview nodes action
@@ -55,28 +55,36 @@ namespace Innofactor.Crm.Shuffle.Builder.AppCode
                 {
                     case "Blocks":
                         return source.StartsWith("DataBlock") || source.StartsWith("SolutionBlock");
+
                     case "DataBlock":
                         return (source.StartsWith("Export") && !node.Nodes.ContainsKey("Export")) ||
                                (source.StartsWith("Import") && !node.Nodes.ContainsKey("Import")) ||
                                (source.StartsWith("Relation") && !node.Nodes.ContainsKey("Relation"));
+
                     case "SolutionBlock":
                         return (source.StartsWith("Export") && !node.Nodes.ContainsKey("Export")) ||
                                (source.StartsWith("Import") && !node.Nodes.ContainsKey("Import"));
+
                     case "Export":
                         return (node.Parent != null && node.Parent.Text.StartsWith("DataBlock") &&
                                  ((source.StartsWith("Attributes")) && !node.Nodes.ContainsKey("Attributes")) ||
                                  source.StartsWith("Filter") ||
                                  source.StartsWith("Sort")) ||
                                (node.Parent != null && node.Parent.Text.StartsWith("SolutionBlock") && source.StartsWith("Settings") && !node.Nodes.ContainsKey("Settings"));
+
                     case "Attributes":
                         return source.StartsWith("Attribute");
+
                     case "Import":
                         return (node.Parent != null && node.Parent.Text.StartsWith("DataBlock") && source.StartsWith("Match")) && !node.Nodes.ContainsKey("Match") ||
                                (node.Parent != null && node.Parent.Text.StartsWith("SolutionBlock") && source.StartsWith("PreRequisites") && !node.Nodes.ContainsKey("PreRequisites"));
+
                     case "Match":
                         return source.StartsWith("Attribute");
+
                     case "PreRequisites":
                         return source.StartsWith("Solution");
+
                     default:
                         return false;
                 }
@@ -137,7 +145,7 @@ namespace Innofactor.Crm.Shuffle.Builder.AppCode
                 // of the same TreeNode in the TreeView
                 var clonedNode = (TreeNode)_tempTreeNode.Clone();
 
-                // If the target TreeNode already contains the in-memory TreeNode or 
+                // If the target TreeNode already contains the in-memory TreeNode or
                 // another TreeNode with the same Text, we need to change the name
                 if (targetNode.Nodes.ContainsKey(_tempTreeNode.Text.Replace(" ", "")))
                 {

@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace Innofactor.Crm.Shuffle.Builder.Controls
+namespace Rappen.XTB.Shuffle.Builder.Controls
 {
     public partial class DataBlockExportControl : ControlBase
     {

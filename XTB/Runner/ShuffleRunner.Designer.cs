@@ -1,4 +1,4 @@
-﻿namespace Innofactor.Crm.Shuffle.Runner
+﻿namespace Rappen.XTB.Shuffle.Runner
 {
     partial class ShuffleRunner
     {

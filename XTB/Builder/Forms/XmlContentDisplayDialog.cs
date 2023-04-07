@@ -9,7 +9,7 @@ using System.Text;
 using System.Windows.Forms;
 using System.Xml;
 
-namespace Innofactor.Crm.Shuffle.Builder.Forms
+namespace Rappen.XTB.Shuffle.Builder.Forms
 {
     public partial class XmlContentDisplayDialog : Form
     {

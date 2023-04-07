@@ -1,6 +1,6 @@
 ﻿using Cinteros.Crm.Utils.Shuffle;
 using Cinteros.Crm.Utils.Shuffle.Types;
-using Innofactor.Xrm.Utils.Common.Extensions;
+using Xrm.Utils.Core.Common.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -10,16 +10,16 @@ using System.Xml;
 using XrmToolBox.Extensibility;
 using XrmToolBox.Extensibility.Interfaces;
 
-namespace Innofactor.Crm.Shuffle.Runner
+namespace Rappen.XTB.Shuffle.Runner
 {
     public partial class ShuffleRunner : PluginControlBase, IMessageBusHost, IGitHubPlugin, IHelpPlugin
     {
         private bool shuffeling = false;
         private bool datafilerequired = true;
 
-        public string RepositoryName => "Innofactor.Crm.CI";
+        public string RepositoryName => "Xrm.Shuffle";
 
-        public string UserName => "Innofactor";
+        public string UserName => "rappen";
 
         public string HelpUrl => "https://jonasr.app/2017/04/devops-i/";
 
@@ -77,7 +77,7 @@ namespace Innofactor.Crm.Shuffle.Runner
                 {
                     shuffeling = true;
                     EnableShuffle();
-                    
+
                     var definitionpath = Path.GetDirectoryName(txtFile.Text);
                     var logPath = Path.Combine(definitionpath, DateTime.Now.ToString("yyyyMMdd") + "_" + DateTime.Now.ToString("HHmmss") + "_" + "ShuffleRunner" + "_" + ConnectionDetail + ".log");
                     var container = new CintContainer(Service, logPath);
@@ -90,7 +90,7 @@ namespace Innofactor.Crm.Shuffle.Runner
                     var definition = new XmlDocument();
                     definition.Load(txtFile.Text);
                     ReplaceShufflePlaceholders(definition);
-                    
+
                     try
                     {
                         if (rbExport.Checked)

@@ -2,7 +2,7 @@
 using System.Linq;
 using System.Windows.Forms;
 
-namespace Innofactor.Crm.Shuffle.Builder.Controls
+namespace Rappen.XTB.Shuffle.Builder.Controls
 {
     public partial class ExportAttributeControl : ControlBase
     {

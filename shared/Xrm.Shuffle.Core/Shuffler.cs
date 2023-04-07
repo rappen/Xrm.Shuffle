@@ -1,9 +1,9 @@
 ﻿namespace Cinteros.Crm.Utils.Shuffle
 {
     using Cinteros.Crm.Utils.Shuffle.Types;
-    using Innofactor.Xrm.Utils.Common.Extensions;
-    using Innofactor.Xrm.Utils.Common.Interfaces;
-    using Innofactor.Xrm.Utils.Common.Misc;
+    using global::Xrm.Utils.Core.Common.Extensions;
+    using global::Xrm.Utils.Core.Common.Interfaces;
+    using global::Xrm.Utils.Core.Common.Misc;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Client;
     using Microsoft.Xrm.Sdk.Query;
@@ -62,8 +62,9 @@
         #endregion Public Delegates
 
         #region Public Events
+
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public event EventHandler<ShuffleEventArgs> RaiseShuffleEvent;
 
@@ -83,7 +84,7 @@
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public ShuffleDefinition ShuffleDefinition
         {
@@ -448,7 +449,7 @@
                             root.AppendChild(xBlock);
                             XML.AppendAttribute(xBlock, "Name", block);
                             XML.AppendAttribute(xBlock, "Count", blocks[block].Count().ToString());
-                            
+
                             var xSerialized = blocks[block].Serialize(container, (SerializationStyle)type);
                             xBlock.AppendChild(xml.ImportNode(xSerialized.ChildNodes[0], true));
                         }

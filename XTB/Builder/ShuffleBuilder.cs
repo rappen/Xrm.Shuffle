@@ -1,6 +1,6 @@
 ﻿using Cinteros.Crm.Utils.Shuffle;
-using Innofactor.Crm.Shuffle.Builder.AppCode;
-using Innofactor.Crm.Shuffle.Builder.Controls;
+using Rappen.XTB.Shuffle.Builder.AppCode;
+using Rappen.XTB.Shuffle.Builder.Controls;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
@@ -16,9 +16,9 @@ using System.Xml.Linq;
 using XrmToolBox.Extensibility;
 using XrmToolBox.Extensibility.Args;
 using XrmToolBox.Extensibility.Interfaces;
-using Clipboard = Innofactor.Crm.Shuffle.Builder.AppCode.Clipboard;
+using Clipboard = Rappen.XTB.Shuffle.Builder.AppCode.Clipboard;
 
-namespace Innofactor.Crm.Shuffle.Builder
+namespace Rappen.XTB.Shuffle.Builder
 {
     public partial class ShuffleBuilder : PluginControlBase, IMessageBusHost, IGitHubPlugin, IStatusBarMessenger, IHelpPlugin
     {
@@ -29,6 +29,7 @@ namespace Innofactor.Crm.Shuffle.Builder
         private bool buttonsEnabled = true;
 
         public event EventHandler<MessageBusEventArgs> OnOutgoingMessage;
+
         public event EventHandler<StatusBarMessageEventArgs> SendMessageToStatusBar;
 
         public List<EntityMetadata> Entities { get; private set; } = null;
@@ -37,9 +38,9 @@ namespace Innofactor.Crm.Shuffle.Builder
 
         public EntityCollection Solutions { get; private set; } = null;
 
-        public string RepositoryName => "Innofactor.Crm.CI";
+        public string RepositoryName => "Xrm.Shuffle";
 
-        public string UserName => "Innofactor";
+        public string UserName => "rappen";
 
         public string HelpUrl => "https://jonasr.app/2017/04/devops-i/";
 
@@ -202,7 +203,7 @@ namespace Innofactor.Crm.Shuffle.Builder
             CloseTool();
         }
 
-        #endregion
+        #endregion Event handlers
 
         /// <summary>
         ///     Loads the Definition from the extracted Xml solution files
@@ -600,12 +601,15 @@ namespace Innofactor.Crm.Shuffle.Builder
                     case "ShuffleDefinition":
                         ctrl = new ShuffleDefinitionControl(collec, this);
                         break;
+
                     case "DataBlock":
                         ctrl = new DataBlockControl(collec, this, Entities);
                         break;
+
                     case "SolutionBlock":
                         ctrl = new SolutionBlockControl(collec, this);
                         break;
+
                     case "Export":
                         if (node.Parent?.Name == "DataBlock")
                         {
@@ -620,6 +624,7 @@ namespace Innofactor.Crm.Shuffle.Builder
                             ctrl = new ErrorControl("Invalid parent", "Parent node is neither DataBlock nor SolutionBlock.");
                         }
                         break;
+
                     case "Import":
                         if (node.Parent?.Name == "DataBlock")
                         {

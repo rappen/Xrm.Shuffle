@@ -3,14 +3,14 @@
 // CODEPLEX: http://xrmtoolbox.codeplex.com
 // BLOG: http://mscrmtools.blogspot.com
 
-using Innofactor.Crm.Shuffle.Builder.Controls;
+using Rappen.XTB.Shuffle.Builder.Controls;
 using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using System.Xml;
 using System.Xml.Linq;
 
-namespace Innofactor.Crm.Shuffle.Builder.AppCode
+namespace Rappen.XTB.Shuffle.Builder.AppCode
 {
     /// <summary>
     /// Class that helps to manage TreeNode from SiteMap Treeview
@@ -139,7 +139,6 @@ namespace Innofactor.Crm.Shuffle.Builder.AppCode
         /// <param name="tree">Current application form</param>
         public static void AddContextMenu(TreeNode node, ShuffleBuilder tree)
         {
-
             tree.addMenu.Items.Clear();
             tree.gbNodeQuickActions.Controls.Clear();
             if (node == null && tree.tvDefinition.Nodes.Count > 0)

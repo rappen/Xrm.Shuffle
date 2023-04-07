@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Windows.Forms;
 using System.Xml.Serialization;
 
-namespace Innofactor.Crm.ShuffleDeployer
+namespace Rappen.XTB.ShuffleDeployer
 {
     public class Package
     {

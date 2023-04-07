@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Settings xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Version>1.2020.2.1</Version>
-  <OutputFolder>C:\Dev\GitHub\Shuffle\Innofactor.Crm.CI\shared\Innofactor.Crm.Shuffle</OutputFolder>
+  <OutputFolder>C:\Dev\GitHub\Shuffle\Innofactor.Crm.CI\shared\Rappen.XTB.Shuffle</OutputFolder>
   <NameSpace>Cinteros.Crm.Utils.Shuffle</NameSpace>
   <UseCommonFile>true</UseCommonFile>
   <CommonFile>Const</CommonFile>

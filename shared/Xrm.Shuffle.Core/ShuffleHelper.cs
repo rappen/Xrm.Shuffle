@@ -1,9 +1,9 @@
 ﻿namespace Cinteros.Crm.Utils.Shuffle
 {
     using Cinteros.Crm.Utils.Shuffle.Types;
-    using Innofactor.Xrm.Utils.Common.Extensions;
-    using Innofactor.Xrm.Utils.Common.Interfaces;
-    using Innofactor.Xrm.Utils.Common.Misc;
+    using global::Xrm.Utils.Core.Common.Extensions;
+    using global::Xrm.Utils.Core.Common.Interfaces;
+    using global::Xrm.Utils.Core.Common.Misc;
     using System;
     using System.Collections;
     using System.Collections.Generic;
@@ -26,7 +26,7 @@
         #region Public Properties
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public static XmlSchemaSet Schemas
         {

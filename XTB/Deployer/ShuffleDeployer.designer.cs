@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Innofactor.Crm.ShuffleDeployer
+namespace Rappen.XTB.ShuffleDeployer
 {
     partial class ShuffleDeployer
     {

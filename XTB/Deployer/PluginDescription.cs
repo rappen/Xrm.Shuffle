@@ -1,10 +1,10 @@
-﻿using Innofactor.Crm.Shuffle.XTB;
+﻿using Rappen.XTB.Shuffle.XTB;
 using System;
 using System.ComponentModel.Composition;
 using XrmToolBox.Extensibility;
 using XrmToolBox.Extensibility.Interfaces;
 
-namespace Innofactor.Crm.ShuffleDeployer
+namespace Rappen.XTB.ShuffleDeployer
 {
     [Export(typeof(IXrmToolBoxPlugin)),
         ExportMetadata("Name", "Shuffle Deployer"),

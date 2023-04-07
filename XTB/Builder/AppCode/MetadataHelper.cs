@@ -5,7 +5,7 @@ using Microsoft.Xrm.Sdk.Metadata.Query;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Innofactor.Crm.Shuffle.Builder.AppCode
+namespace Rappen.XTB.Shuffle.Builder.AppCode
 {
     public static class MetadataHelper
     {

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Xml.Serialization;
 
-namespace Innofactor.Crm.ShuffleDeployer
+namespace Rappen.XTB.ShuffleDeployer
 {
     [Serializable]
     public class Module

@@ -3,7 +3,7 @@
 // Author     : Jonas Rapp https://twitter.com/rappen
 // GitHub     : https://github.com/rappen/LCG-UDG
 // Source Org : https://crmk-bn-test.crm4.dynamics.com/
-// Filename   : C:\Dev\GitHub\Shuffle\Innofactor.Crm.CI\shared\Innofactor.Crm.Shuffle\Const.cs
+// Filename   : C:\Dev\GitHub\Shuffle\Innofactor.Crm.CI\shared\Rappen.XTB.Shuffle\Const.cs
 // Created    : 2020-12-02 22:12:30
 // *********************************************************************
 

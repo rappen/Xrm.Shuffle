@@ -1,4 +1,4 @@
-﻿namespace Innofactor.Crm.Shuffle.Builder.Controls
+﻿namespace Rappen.XTB.Shuffle.Builder.Controls
 {
     partial class FetchControl
     {

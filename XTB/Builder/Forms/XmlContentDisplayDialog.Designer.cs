@@ -1,4 +1,4 @@
-﻿namespace Innofactor.Crm.Shuffle.Builder.Forms
+﻿namespace Rappen.XTB.Shuffle.Builder.Forms
 {
     partial class XmlContentDisplayDialog
     {

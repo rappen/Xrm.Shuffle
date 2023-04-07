@@ -8,8 +8,8 @@
     <ProjectGuid>{13AE5564-5C72-4A70-8AC5-00D227E8200A}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Innofactor.Crm.XTB.Shuffle</RootNamespace>
-    <AssemblyName>Innofactor.Crm.XTB.Shuffle.Unmerged</AssemblyName>
+    <RootNamespace>Rappen.XTB.Shuffle</RootNamespace>
+    <AssemblyName>Rappen.XTB.Shuffle.Unmerged</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
@@ -411,15 +411,15 @@
   <ItemGroup>
     <Folder Include="Resources\" />
   </ItemGroup>
-  <Import Project="..\shared\Innofactor.Crm.Shuffle\Innofactor.Crm.Shuffle.projitems" Label="Shared" />
-  <Import Project="..\Xrm.Utils.Core\Innofactor.Xrm.Utils.Common\Innofactor.Xrm.Utils.Common.projitems" Label="Shared" />
+  <Import Project="..\shared\Xrm.Shuffle.Core\Xrm.Shuffle.Core.projitems" Label="Shared" />
+  <Import Project="..\Xrm.Utils.Core\Xrm.Utils.Core.Common\Xrm.Utils.Core.Common.projitems" Label="Shared" />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>ilmerge.exe /target:library /targetplatform:v4,"C:\Windows\Microsoft.NET\Framework\v4.0.30319" "/out:.\Innofactor.Crm.XTB.Shuffle.dll" ".\$(TargetFileName)" "Ionic.Zip.dll"
+    <PostBuildEvent>ilmerge.exe /target:library /targetplatform:v4,"C:\Windows\Microsoft.NET\Framework\v4.0.30319" "/out:.\Rappen.XTB.Shuffle.dll" ".\$(TargetFileName)" "Ionic.Zip.dll"
 
 
 IF NOT EXIST Plugins mkdir Plugins
-move /Y Innofactor.Crm.XTB.Shuffle.dll Plugins
+move /Y Rappen.XTB.Shuffle.dll Plugins
 
 </PostBuildEvent>
   </PropertyGroup>

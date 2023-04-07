@@ -1,8 +1,8 @@
 ﻿using Cinteros.Crm.Utils.Shuffle;
-using Innofactor.Xrm.Utils.Common.Extensions;
-using Innofactor.Xrm.Utils.Common.Interfaces;
-using Innofactor.Xrm.Utils.Common.Loggers;
-using Innofactor.Xrm.Utils.Common.Misc;
+using Xrm.Utils.Core.Common.Extensions;
+using Xrm.Utils.Core.Common.Interfaces;
+using Xrm.Utils.Core.Common.Loggers;
+using Xrm.Utils.Core.Common.Misc;
 using Ionic.Zip;
 using McTools.Xrm.Connection;
 using System;
@@ -18,13 +18,13 @@ using System.Xml.Serialization;
 using XrmToolBox.Extensibility;
 using XrmToolBox.Extensibility.Interfaces;
 
-namespace Innofactor.Crm.ShuffleDeployer
+namespace Rappen.XTB.ShuffleDeployer
 {
     public partial class ShuffleDeployer : PluginControlBase, IGitHubPlugin, IWorkerHost
     {
         #region Private parts
 
-        private const string AppName = "Innofactor CRM Deployer";
+        private const string AppName = "Xrm Shuffle Dataverse/365/CRM Deployer";
         private readonly string TempFolder = Path.GetTempPath() + AppName;
         private string packagefile;
         private Package package;
@@ -59,9 +59,9 @@ namespace Innofactor.Crm.ShuffleDeployer
             }
         }
 
-        public string RepositoryName => "Innofactor.Crm.CI";
+        public string RepositoryName => "Xrm.Shuffle";
 
-        public string UserName => "Innofactor";
+        public string UserName => "rappen";
 
         #endregion Private parts
 
@@ -328,7 +328,7 @@ namespace Innofactor.Crm.ShuffleDeployer
         {
             var ofd = new OpenFileDialog()
             {
-                Filter = "Innofactor CRM Deployer|*.cdzip;*.cdpkg|Innofactor CRM Deployer Zip (*.cdzip)|*.cdzip|Innofactor CRM Deployer Package (*.cdpkg)|*.cdpkg|All files (*.*)|*.*",
+                Filter = $"{AppName}|*.cdzip;*.cdpkg|Deployer Zip (*.cdzip)|*.cdzip|Deployer Package (*.cdpkg)|*.cdpkg|All files (*.*)|*.*",
                 Title = AppName + " Package"
             };
             if (ofd.ShowDialog(this) == DialogResult.OK && File.Exists(ofd.FileName))
@@ -376,7 +376,7 @@ namespace Innofactor.Crm.ShuffleDeployer
             var sfd = new SaveFileDialog()
             {
                 DefaultExt = "*.cdpkg",
-                Filter = "Innofactor CRM Deployer Package (*.cdpkg)|*.cdpkg",
+                Filter = "Deployer Package (*.cdpkg)|*.cdpkg",
                 Title = "Save Deployment Package",
                 FileName = Path.GetFileName(packagefile)
             };

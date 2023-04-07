@@ -6,7 +6,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Innofactor.Crm.Shuffle.Builder.AppCode
+namespace Rappen.XTB.Shuffle.Builder.AppCode
 {
     public class SaveEventArgs : EventArgs
     {

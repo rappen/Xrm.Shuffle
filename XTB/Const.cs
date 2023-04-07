@@ -1,4 +1,4 @@
-﻿namespace Innofactor.Crm.Shuffle.XTB
+﻿namespace Rappen.XTB.Shuffle.XTB
 {
     internal static class XTBConst
     {

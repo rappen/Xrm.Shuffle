@@ -7,7 +7,7 @@ using Cinteros.Xrm.XmlEditorUtils;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace Innofactor.Crm.Shuffle.Builder.AppCode
+namespace Rappen.XTB.Shuffle.Builder.AppCode
 {
     internal class DefinitionNodeCapabilities : TreeNodeCapabilities
     {
@@ -21,6 +21,7 @@ namespace Innofactor.Crm.Shuffle.Builder.AppCode
                     CutCopy = false;
                     ChildTypes.Add(new ChildNodeCapabilities("Blocks", false));
                     break;
+
                 case "blocks":
                     Delete = false;
                     CutCopy = false;
@@ -28,15 +29,18 @@ namespace Innofactor.Crm.Shuffle.Builder.AppCode
                     ChildTypes.Add(new ChildNodeCapabilities("SolutionBlock", true));
                     ChildTypes.Add(new ChildNodeCapabilities("#comment", true));
                     break;
+
                 case "datablock":
                     ChildTypes.Add(new ChildNodeCapabilities("Export", false));
                     ChildTypes.Add(new ChildNodeCapabilities("Import", false));
                     ChildTypes.Add(new ChildNodeCapabilities("Relation", true));
                     break;
+
                 case "solutionblock":
                     ChildTypes.Add(new ChildNodeCapabilities("Export", false));
                     ChildTypes.Add(new ChildNodeCapabilities("Import", false));
                     break;
+
                 case "export":
                     if (node.Parent.Name.ToLowerInvariant().StartsWith("datablock"))
                     {
@@ -57,6 +61,7 @@ namespace Innofactor.Crm.Shuffle.Builder.AppCode
                         ChildTypes.Add(new ChildNodeCapabilities("Settings", false));
                     }
                     break;
+
                 case "import":
                     if (node.Parent.Name.ToLowerInvariant().StartsWith("datablock"))
                     {
@@ -67,27 +72,34 @@ namespace Innofactor.Crm.Shuffle.Builder.AppCode
                         ChildTypes.Add(new ChildNodeCapabilities("PreRequisites", false));
                     }
                     break;
+
                 case "attributes":
                     //Delete = false;
                     ChildTypes.Add(new ChildNodeCapabilities("Attribute", true));
                     break;
+
                 case "match":
                     ChildTypes.Add(new ChildNodeCapabilities("Attribute", true));
                     break;
+
                 case "attribute":
                     Delete = node.Parent != null && node.Parent.Nodes.Count > 1;
                     break;
+
                 case "filter":
                 case "sort":
                 case "relation":
                 case "settings":
                     break;
+
                 case "prerequisites":
                     ChildTypes.Add(new ChildNodeCapabilities("Solution", true));
                     break;
+
                 case "solution":
                     Delete = node.Parent != null && node.Parent.Nodes.Count > 1;
                     break;
+
                 case "#comment":
                     Comment = false;
                     Uncomment = true;

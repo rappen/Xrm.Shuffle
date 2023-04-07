@@ -1,9 +1,9 @@
 ﻿namespace Cinteros.Crm.Utils.Shuffle
 {
     using Cinteros.Crm.Utils.Shuffle.Types;
-    using Innofactor.Xrm.Utils.Common.Extensions;
-    using Innofactor.Xrm.Utils.Common.Interfaces;
-    using Innofactor.Xrm.Utils.Common.Misc;
+    using global::Xrm.Utils.Core.Common.Extensions;
+    using global::Xrm.Utils.Core.Common.Interfaces;
+    using global::Xrm.Utils.Core.Common.Misc;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Messages;
     using Microsoft.Xrm.Sdk.Metadata;
@@ -415,24 +415,21 @@
 #if DEBUG
                                     container.Log($"{attrname} added");
 #endif
-
                                 }
                                 else
                                 {
 #if DEBUG
                                     container.Log($"{attrname} already exists.");
 #endif
-
                                 }
                             }
                         }
                         foreach (var newattr in newattributes)
                         {
-                            
 #if DEBUG
                             container.Log($"Entity {entity.LogicalName} contains attribute {newattr.Key}: {entity.Attributes.Contains(newattr.Key)}");
 #endif
-                            if(!entity.Attributes.Contains(newattr.Key))
+                            if (!entity.Attributes.Contains(newattr.Key))
                             {
                                 entity.Attributes.Add(newattr.Key, newattr.Value);
                             }
@@ -440,7 +437,7 @@
                     }
                     container.EndSection();
 
-#endregion FetchXML Intersect
+                    #endregion FetchXML Intersect
                 }
 
                 container.Log($"Returning {cExportEntities.Count()} records");
@@ -486,6 +483,6 @@
             return type;
         }
 
-#endregion Private Methods
+        #endregion Private Methods
     }
 }

@@ -1,12 +1,12 @@
 ﻿namespace Cinteros.Crm.Utils.Shuffle
 {
-    using Innofactor.Xrm.Utils.Common.Interfaces;
-    using Innofactor.Xrm.Utils.Common.Loggers;
+    using global::Xrm.Utils.Core.Common.Interfaces;
+    using global::Xrm.Utils.Core.Common.Loggers;
     using Microsoft.Xrm.Sdk;
     using System;
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public class CintContainer : IExecutionContainer
     {
@@ -19,7 +19,7 @@
         #endregion Private Fields
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="service"></param>
         /// <param name="logpath">Folder path for logs</param>
@@ -30,7 +30,7 @@
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public dynamic Values
         {
@@ -38,12 +38,12 @@
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public ILoggable Logger => logger.Value;
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public IOrganizationService Service => service.Value;
     }
