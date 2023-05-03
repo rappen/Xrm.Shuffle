@@ -228,6 +228,12 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="About.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="About.designer.cs">
+      <DependentUpon>About.cs</DependentUpon>
+    </Compile>
     <Compile Include="Builder\AppCode\IComboBoxItem.cs" />
     <Compile Include="Builder\AppCode\MetadataHelper.cs" />
     <Compile Include="Builder\AppCode\TreeNodeCapabilities.cs" />
@@ -372,6 +378,11 @@
       <DependentUpon>ShuffleBuilder.cs</DependentUpon>
     </Compile>
     <Compile Include="Builder\TreeNodeHelper.cs" />
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
     <Compile Include="Runner\PluginDescription.cs" />
     <Compile Include="Runner\ShuffleRunner.cs">
       <SubType>UserControl</SubType>
@@ -379,6 +390,7 @@
     <Compile Include="Runner\ShuffleRunner.Designer.cs">
       <DependentUpon>ShuffleRunner.cs</DependentUpon>
     </Compile>
+    <Compile Include="Utils.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
@@ -388,6 +400,9 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="About.resx">
+      <DependentUpon>About.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Builder\Controls\ControlBase.resx">
       <DependentUpon>ControlBase.cs</DependentUpon>
     </EmbeddedResource>
@@ -452,6 +467,10 @@
     <EmbeddedResource Include="Deployer\ShuffleDeployer.resx">
       <DependentUpon>ShuffleDeployer.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
     <EmbeddedResource Include="Runner\ShuffleRunner.resx">
       <DependentUpon>ShuffleRunner.cs</DependentUpon>
     </EmbeddedResource>
@@ -460,6 +479,15 @@
     <Content Include="Deployer\CSD.ico" />
     <Content Include="Deployer\icon.png" />
     <Content Include="Deployer\Ionic.Zip.xml" />
+    <None Include="Images\Shuffle2-R-80.png" />
+    <None Include="Images\Shuffle2-R-32.png" />
+    <None Include="Images\Shuffle2-D-80.png" />
+    <None Include="Images\Shuffle2-D-32.png" />
+    <None Include="Images\Shuffle-2B-80.png" />
+    <None Include="Images\Shuffle-2B-32.png" />
+    <None Include="Images\Shuffle-R-720.png" />
+    <None Include="Images\Shuffle-D-720.png" />
+    <None Include="Images\Shuffle-B-720.png" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Resources\" />

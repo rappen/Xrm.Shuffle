@@ -832,7 +832,9 @@ namespace Rappen.XTB.ShuffleDeployer
             this.BackColor = System.Drawing.SystemColors.ControlLightLight;
             this.Controls.Add(this.tabControl1);
             this.Name = "ShuffleDeployer";
+            this.PluginIcon = ((System.Drawing.Icon)(resources.GetObject("$this.PluginIcon")));
             this.Size = new System.Drawing.Size(737, 603);
+            this.TabIcon = global::Rappen.XTB.Shuffle.Properties.Resources.Shuffle_D_32;
             this.Load += new System.EventHandler(this.ShuffleDeployer_Load);
             this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.ShuffleDeployer_KeyDown);
             this.tabControl1.ResumeLayout(false);

@@ -20,7 +20,7 @@ using Clipboard = Rappen.XTB.Shuffle.Builder.AppCode.Clipboard;
 
 namespace Rappen.XTB.Shuffle.Builder
 {
-    public partial class ShuffleBuilder : PluginControlBase, IMessageBusHost, IGitHubPlugin, IStatusBarMessenger, IHelpPlugin
+    public partial class ShuffleBuilder : PluginControlBase, IMessageBusHost, IGitHubPlugin, IStatusBarMessenger, IHelpPlugin, IAboutPlugin
     {
         internal Clipboard clipboard = new Clipboard();
         private string fileName;
@@ -1032,6 +1032,16 @@ namespace Rappen.XTB.Shuffle.Builder
                     MessageBox.Show(msg, "Uncomment", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
+        }
+
+        public void ShowAboutDialog()
+        {
+            new About("B").ShowDialog(this);
+        }
+
+        private void tslAbout_Click(object sender, EventArgs e)
+        {
+            ShowAboutDialog();
         }
     }
 }

@@ -12,7 +12,7 @@ using XrmToolBox.Extensibility.Interfaces;
 
 namespace Rappen.XTB.Shuffle.Runner
 {
-    public partial class ShuffleRunner : PluginControlBase, IMessageBusHost, IGitHubPlugin, IHelpPlugin
+    public partial class ShuffleRunner : PluginControlBase, IMessageBusHost, IGitHubPlugin, IHelpPlugin, IAboutPlugin
     {
         private bool shuffeling = false;
         private bool datafilerequired = true;
@@ -22,6 +22,8 @@ namespace Rappen.XTB.Shuffle.Runner
         public string UserName => "rappen";
 
         public string HelpUrl => "https://jonasr.app/2017/04/devops-i/";
+
+        public event EventHandler<MessageBusEventArgs> OnOutgoingMessage;
 
         public ShuffleRunner()
         {
@@ -329,6 +331,14 @@ namespace Rappen.XTB.Shuffle.Runner
             }
         }
 
-        public event EventHandler<MessageBusEventArgs> OnOutgoingMessage;
+        public void ShowAboutDialog()
+        {
+            new About("R").ShowDialog(this);
+        }
+
+        private void tslAbout_Click(object sender, EventArgs e)
+        {
+            ShowAboutDialog();
+        }
     }
 }

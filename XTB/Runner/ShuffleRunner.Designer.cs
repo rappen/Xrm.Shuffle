@@ -45,7 +45,7 @@
             this.btnData = new System.Windows.Forms.Button();
             this.imageList1 = new System.Windows.Forms.ImageList(this.components);
             this.toolStripMain = new System.Windows.Forms.ToolStrip();
-            this.tsbCloseThisTab = new System.Windows.Forms.ToolStripButton();
+            this.tslAbout = new System.Windows.Forms.ToolStripLabel();
             this.lbLog = new System.Windows.Forms.ListBox();
             this.label6 = new System.Windows.Forms.Label();
             this.cmbType = new System.Windows.Forms.ComboBox();
@@ -59,7 +59,7 @@
             // btnFile
             // 
             this.btnFile.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnFile.Location = new System.Drawing.Point(393, 34);
+            this.btnFile.Location = new System.Drawing.Point(393, 46);
             this.btnFile.Name = "btnFile";
             this.btnFile.Size = new System.Drawing.Size(29, 23);
             this.btnFile.TabIndex = 2;
@@ -71,7 +71,7 @@
             // 
             this.txtFile.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.txtFile.Location = new System.Drawing.Point(75, 36);
+            this.txtFile.Location = new System.Drawing.Point(75, 48);
             this.txtFile.Name = "txtFile";
             this.txtFile.Size = new System.Drawing.Size(312, 20);
             this.txtFile.TabIndex = 1;
@@ -80,7 +80,7 @@
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(3, 39);
+            this.label1.Location = new System.Drawing.Point(3, 51);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(51, 13);
             this.label1.TabIndex = 2;
@@ -90,7 +90,7 @@
             // 
             this.rbExport.AutoSize = true;
             this.rbExport.Checked = true;
-            this.rbExport.Location = new System.Drawing.Point(75, 88);
+            this.rbExport.Location = new System.Drawing.Point(75, 100);
             this.rbExport.Name = "rbExport";
             this.rbExport.Size = new System.Drawing.Size(55, 17);
             this.rbExport.TabIndex = 5;
@@ -102,7 +102,7 @@
             // rbImport
             // 
             this.rbImport.AutoSize = true;
-            this.rbImport.Location = new System.Drawing.Point(136, 88);
+            this.rbImport.Location = new System.Drawing.Point(136, 100);
             this.rbImport.Name = "rbImport";
             this.rbImport.Size = new System.Drawing.Size(54, 17);
             this.rbImport.TabIndex = 6;
@@ -113,7 +113,7 @@
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(3, 118);
+            this.label2.Location = new System.Drawing.Point(3, 130);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(42, 13);
             this.label2.TabIndex = 5;
@@ -123,7 +123,7 @@
             // 
             this.txtParams.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.txtParams.Location = new System.Drawing.Point(75, 115);
+            this.txtParams.Location = new System.Drawing.Point(75, 127);
             this.txtParams.Multiline = true;
             this.txtParams.Name = "txtParams";
             this.txtParams.Size = new System.Drawing.Size(347, 57);
@@ -132,7 +132,7 @@
             // label3
             // 
             this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(3, 90);
+            this.label3.Location = new System.Drawing.Point(3, 102);
             this.label3.Name = "label3";
             this.label3.Size = new System.Drawing.Size(37, 13);
             this.label3.TabIndex = 7;
@@ -141,7 +141,7 @@
             // btnShuffle
             // 
             this.btnShuffle.Enabled = false;
-            this.btnShuffle.Location = new System.Drawing.Point(147, 178);
+            this.btnShuffle.Location = new System.Drawing.Point(147, 190);
             this.btnShuffle.Name = "btnShuffle";
             this.btnShuffle.Size = new System.Drawing.Size(160, 36);
             this.btnShuffle.TabIndex = 9;
@@ -152,7 +152,7 @@
             // label4
             // 
             this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(3, 293);
+            this.label4.Location = new System.Drawing.Point(3, 305);
             this.label4.Name = "label4";
             this.label4.Size = new System.Drawing.Size(25, 13);
             this.label4.TabIndex = 9;
@@ -161,7 +161,7 @@
             // label5
             // 
             this.label5.AutoSize = true;
-            this.label5.Location = new System.Drawing.Point(3, 65);
+            this.label5.Location = new System.Drawing.Point(3, 77);
             this.label5.Name = "label5";
             this.label5.Size = new System.Drawing.Size(30, 13);
             this.label5.TabIndex = 12;
@@ -171,7 +171,7 @@
             // 
             this.txtData.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.txtData.Location = new System.Drawing.Point(75, 62);
+            this.txtData.Location = new System.Drawing.Point(75, 74);
             this.txtData.Name = "txtData";
             this.txtData.Size = new System.Drawing.Size(312, 20);
             this.txtData.TabIndex = 3;
@@ -180,7 +180,7 @@
             // btnData
             // 
             this.btnData.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnData.Location = new System.Drawing.Point(393, 60);
+            this.btnData.Location = new System.Drawing.Point(393, 72);
             this.btnData.Name = "btnData";
             this.btnData.Size = new System.Drawing.Size(29, 23);
             this.btnData.TabIndex = 4;
@@ -197,23 +197,24 @@
             // toolStripMain
             // 
             this.toolStripMain.AutoSize = false;
+            this.toolStripMain.ImageScalingSize = new System.Drawing.Size(32, 32);
             this.toolStripMain.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.tsbCloseThisTab});
+            this.tslAbout});
             this.toolStripMain.Location = new System.Drawing.Point(0, 0);
             this.toolStripMain.Name = "toolStripMain";
-            this.toolStripMain.Size = new System.Drawing.Size(432, 25);
+            this.toolStripMain.Size = new System.Drawing.Size(432, 45);
             this.toolStripMain.TabIndex = 22;
             this.toolStripMain.Text = "toolStrip1";
             // 
-            // tsbCloseThisTab
+            // tslAbout
             // 
-            this.tsbCloseThisTab.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
-            this.tsbCloseThisTab.Image = ((System.Drawing.Image)(resources.GetObject("tsbCloseThisTab.Image")));
-            this.tsbCloseThisTab.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.tsbCloseThisTab.Name = "tsbCloseThisTab";
-            this.tsbCloseThisTab.Size = new System.Drawing.Size(23, 22);
-            this.tsbCloseThisTab.Text = "Close this tab";
-            this.tsbCloseThisTab.Click += new System.EventHandler(this.tsbCloseThisTab_Click);
+            this.tslAbout.Alignment = System.Windows.Forms.ToolStripItemAlignment.Right;
+            this.tslAbout.Image = global::Rappen.XTB.Shuffle.Properties.Resources.Shuffle_R_32;
+            this.tslAbout.IsLink = true;
+            this.tslAbout.Name = "tslAbout";
+            this.tslAbout.Size = new System.Drawing.Size(72, 42);
+            this.tslAbout.Text = "About";
+            this.tslAbout.Click += new System.EventHandler(this.tslAbout_Click);
             // 
             // lbLog
             // 
@@ -221,15 +222,15 @@
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.lbLog.FormattingEnabled = true;
-            this.lbLog.Location = new System.Drawing.Point(75, 293);
+            this.lbLog.Location = new System.Drawing.Point(75, 305);
             this.lbLog.Name = "lbLog";
-            this.lbLog.Size = new System.Drawing.Size(347, 121);
+            this.lbLog.Size = new System.Drawing.Size(347, 147);
             this.lbLog.TabIndex = 10;
             // 
             // label6
             // 
             this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(211, 90);
+            this.label6.Location = new System.Drawing.Point(211, 102);
             this.label6.Name = "label6";
             this.label6.Size = new System.Drawing.Size(31, 13);
             this.label6.TabIndex = 24;
@@ -239,7 +240,7 @@
             // 
             this.cmbType.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.cmbType.FormattingEnabled = true;
-            this.cmbType.Location = new System.Drawing.Point(249, 88);
+            this.cmbType.Location = new System.Drawing.Point(249, 100);
             this.cmbType.Name = "cmbType";
             this.cmbType.Size = new System.Drawing.Size(118, 21);
             this.cmbType.TabIndex = 7;
@@ -249,7 +250,7 @@
             // 
             this.pbBlocks.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.pbBlocks.Location = new System.Drawing.Point(75, 228);
+            this.pbBlocks.Location = new System.Drawing.Point(75, 240);
             this.pbBlocks.Name = "pbBlocks";
             this.pbBlocks.Size = new System.Drawing.Size(347, 23);
             this.pbBlocks.Step = 1;
@@ -259,7 +260,7 @@
             // 
             this.pbRecords.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.pbRecords.Location = new System.Drawing.Point(75, 258);
+            this.pbRecords.Location = new System.Drawing.Point(75, 270);
             this.pbRecords.Name = "pbRecords";
             this.pbRecords.Size = new System.Drawing.Size(347, 23);
             this.pbRecords.Step = 1;
@@ -268,7 +269,7 @@
             // label7
             // 
             this.label7.AutoSize = true;
-            this.label7.Location = new System.Drawing.Point(3, 232);
+            this.label7.Location = new System.Drawing.Point(3, 244);
             this.label7.Name = "label7";
             this.label7.Size = new System.Drawing.Size(39, 13);
             this.label7.TabIndex = 27;
@@ -277,7 +278,7 @@
             // label8
             // 
             this.label8.AutoSize = true;
-            this.label8.Location = new System.Drawing.Point(3, 262);
+            this.label8.Location = new System.Drawing.Point(3, 274);
             this.label8.Name = "label8";
             this.label8.Size = new System.Drawing.Size(47, 13);
             this.label8.TabIndex = 28;
@@ -294,7 +295,6 @@
             this.Controls.Add(this.cmbType);
             this.Controls.Add(this.label6);
             this.Controls.Add(this.lbLog);
-            this.Controls.Add(this.toolStripMain);
             this.Controls.Add(this.btnData);
             this.Controls.Add(this.label5);
             this.Controls.Add(this.txtData);
@@ -308,9 +308,11 @@
             this.Controls.Add(this.label1);
             this.Controls.Add(this.txtFile);
             this.Controls.Add(this.btnFile);
+            this.Controls.Add(this.toolStripMain);
             this.Name = "ShuffleRunner";
-            this.Size = new System.Drawing.Size(432, 423);
-            this.TabIcon = ((System.Drawing.Image)(resources.GetObject("$this.TabIcon")));
+            this.PluginIcon = ((System.Drawing.Icon)(resources.GetObject("$this.PluginIcon")));
+            this.Size = new System.Drawing.Size(432, 463);
+            this.TabIcon = global::Rappen.XTB.Shuffle.Properties.Resources.Shuffle_R_32;
             this.toolStripMain.ResumeLayout(false);
             this.toolStripMain.PerformLayout();
             this.ResumeLayout(false);
@@ -335,7 +337,6 @@
         private System.Windows.Forms.Button btnData;
         private System.Windows.Forms.ImageList imageList1;
         internal System.Windows.Forms.ToolStrip toolStripMain;
-        private System.Windows.Forms.ToolStripButton tsbCloseThisTab;
         private System.Windows.Forms.ListBox lbLog;
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.ComboBox cmbType;
@@ -343,5 +344,6 @@
         private System.Windows.Forms.ProgressBar pbRecords;
         private System.Windows.Forms.Label label7;
         private System.Windows.Forms.Label label8;
+        private System.Windows.Forms.ToolStripLabel tslAbout;
     }
 }
