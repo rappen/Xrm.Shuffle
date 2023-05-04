@@ -17,11 +17,15 @@ using XrmToolBox.Extensibility;
 using XrmToolBox.Extensibility.Args;
 using XrmToolBox.Extensibility.Interfaces;
 using Clipboard = Rappen.XTB.Shuffle.Builder.AppCode.Clipboard;
+using System.Reflection;
 
 namespace Rappen.XTB.Shuffle.Builder
 {
     public partial class ShuffleBuilder : PluginControlBase, IMessageBusHost, IGitHubPlugin, IStatusBarMessenger, IHelpPlugin, IAboutPlugin
     {
+        private const string aiEndpoint = "https://dc.services.visualstudio.com/v2/track";
+        private const string aiKey = "eed73022-2444-45fd-928b-5eebd8fa46a6";    // jonas@rappen.net tenant, XrmToolBox
+        private AppInsights ai = new AppInsights(aiEndpoint, aiKey, Assembly.GetExecutingAssembly(), "Shuffle Builder");
         internal Clipboard clipboard = new Clipboard();
         private string fileName;
         private static string definitionTemplate = "<ShuffleDefinition><Blocks></Blocks></ShuffleDefinition>";
@@ -170,6 +174,7 @@ namespace Rappen.XTB.Shuffle.Builder
             };
             try
             {
+                ai.WriteEvent($"CallingTo.{args.TargetPlugin}");
                 OnOutgoingMessage(this, args);
             }
             catch (Exception ex)
@@ -185,6 +190,7 @@ namespace Rappen.XTB.Shuffle.Builder
             {
                 TargetArgument = text
             };
+            ai.WriteEvent($"CallingTo.{args.TargetPlugin}");
             OnOutgoingMessage(this, args);
         }
 
@@ -553,6 +559,7 @@ namespace Rappen.XTB.Shuffle.Builder
 
         public void OnIncomingMessage(MessageBusEventArgs message)
         {
+            ai.WriteEvent($"ReturnedFrom.{message.SourcePlugin}");
             if (message.SourcePlugin != "FetchXML Builder" ||
                 !(message.TargetArgument is string fetchxml))
             {
@@ -1042,6 +1049,11 @@ namespace Rappen.XTB.Shuffle.Builder
         private void tslAbout_Click(object sender, EventArgs e)
         {
             ShowAboutDialog();
+        }
+
+        private void ShuffleBuilder_Load(object sender, EventArgs e)
+        {
+            ai.WriteEvent("Load");
         }
     }
 }

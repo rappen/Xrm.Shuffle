@@ -9,11 +9,15 @@ using System.Windows.Forms;
 using System.Xml;
 using XrmToolBox.Extensibility;
 using XrmToolBox.Extensibility.Interfaces;
+using System.Reflection;
 
 namespace Rappen.XTB.Shuffle.Runner
 {
     public partial class ShuffleRunner : PluginControlBase, IMessageBusHost, IGitHubPlugin, IHelpPlugin, IAboutPlugin
     {
+        private const string aiEndpoint = "https://dc.services.visualstudio.com/v2/track";
+        private const string aiKey = "eed73022-2444-45fd-928b-5eebd8fa46a6";    // jonas@rappen.net tenant, XrmToolBox
+        private AppInsights ai = new AppInsights(aiEndpoint, aiKey, Assembly.GetExecutingAssembly(), "Shuffle Runner");
         private bool shuffeling = false;
         private bool datafilerequired = true;
 
@@ -72,6 +76,7 @@ namespace Rappen.XTB.Shuffle.Runner
 
         private void btnShuffle_Click(object sender, EventArgs e)
         {
+            ai.WriteEvent(rbExport.Checked ? "Exporting" : rbImport.Checked ? "Importing" : "<noop>");
             lbLog.Items.Clear();
             var type = cmbType.SelectedItem != null ? (SerializationType)cmbType.SelectedItem : SerializationType.Simple;
             WorkAsync(new WorkAsyncInfo("Doing the Shuffle...",
@@ -324,6 +329,7 @@ namespace Rappen.XTB.Shuffle.Runner
 
         public void OnIncomingMessage(MessageBusEventArgs message)
         {
+            ai.WriteEvent($"CalledBy.{message.SourcePlugin}");
             if (message.TargetArgument is string)
             {
                 var definitionfile = (string)message.TargetArgument;
@@ -339,6 +345,11 @@ namespace Rappen.XTB.Shuffle.Runner
         private void tslAbout_Click(object sender, EventArgs e)
         {
             ShowAboutDialog();
+        }
+
+        private void ShuffleRunner_Load(object sender, EventArgs e)
+        {
+            ai.WriteEvent("Load");
         }
     }
 }

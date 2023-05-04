@@ -17,6 +17,7 @@ using System.Xml;
 using System.Xml.Serialization;
 using XrmToolBox.Extensibility;
 using XrmToolBox.Extensibility.Interfaces;
+using System.Reflection;
 
 namespace Rappen.XTB.ShuffleDeployer
 {
@@ -24,6 +25,9 @@ namespace Rappen.XTB.ShuffleDeployer
     {
         #region Private parts
 
+        private const string aiEndpoint = "https://dc.services.visualstudio.com/v2/track";
+        private const string aiKey = "eed73022-2444-45fd-928b-5eebd8fa46a6";    // jonas@rappen.net tenant, XrmToolBox
+        private AppInsights ai = new AppInsights(aiEndpoint, aiKey, Assembly.GetExecutingAssembly(), "Shuffle Deployer");
         private const string AppName = "Xrm Shuffle Dataverse/365/CRM Deployer";
         private readonly string TempFolder = Path.GetTempPath() + AppName;
         private string packagefile;
@@ -116,6 +120,7 @@ namespace Rappen.XTB.ShuffleDeployer
 
         private void ShuffleDeployer_Load(object sender, EventArgs e)
         {
+            ai.WriteEvent("Load");
             var location = System.Reflection.Assembly.GetExecutingAssembly().Location;
             var verinfo = FileVersionInfo.GetVersionInfo(location);
             Text = Text + " " + verinfo.FileVersion;
@@ -492,6 +497,7 @@ namespace Rappen.XTB.ShuffleDeployer
 
         private string Deploy(List<Module> selectedModules)
         {
+            ai.WriteEvent("Deploying");
             var packagefolder = Path.GetDirectoryName(packagefile);
 
             logfile = Path.Combine(packagefolder, DateTime.Now.ToString("yyyyMMdd") + "_" + DateTime.Now.ToString("HHmmss") + "_" + Path.GetFileName(packagefile).Replace(".cdpkg", "") + "_" + ConnectionDetail + ".log");
@@ -546,6 +552,7 @@ namespace Rappen.XTB.ShuffleDeployer
 
                 container.Logger.CloseLog();
             }
+            ai.WriteEvent(string.IsNullOrEmpty(returnmessage) ? "Deployed" : "Error");
             return returnmessage;
         }
 

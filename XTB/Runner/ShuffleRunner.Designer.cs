@@ -313,6 +313,7 @@
             this.PluginIcon = ((System.Drawing.Icon)(resources.GetObject("$this.PluginIcon")));
             this.Size = new System.Drawing.Size(432, 463);
             this.TabIcon = global::Rappen.XTB.Shuffle.Properties.Resources.Shuffle_R_32;
+            this.Load += new System.EventHandler(this.ShuffleRunner_Load);
             this.toolStripMain.ResumeLayout(false);
             this.toolStripMain.PerformLayout();
             this.ResumeLayout(false);
