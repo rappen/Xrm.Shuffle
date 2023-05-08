@@ -28,7 +28,7 @@ namespace Rappen.XTB.ShuffleDeployer
         private const string aiEndpoint = "https://dc.services.visualstudio.com/v2/track";
         private const string aiKey = "eed73022-2444-45fd-928b-5eebd8fa46a6";    // jonas@rappen.net tenant, XrmToolBox
         private AppInsights ai = new AppInsights(aiEndpoint, aiKey, Assembly.GetExecutingAssembly(), "Shuffle Deployer");
-        private const string AppName = "Xrm Shuffle Dataverse/365/CRM Deployer";
+        private const string AppName = "Shuffle Deployer";
         private readonly string TempFolder = Path.GetTempPath() + AppName;
         private string packagefile;
         private Package package;
