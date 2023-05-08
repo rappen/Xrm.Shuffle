@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<package>
+	<metadata>
+		<id>Rappen.XrmToolBox.Shuffle.Runner</id>
+		<version>1.0.0</version>
+		<title>Shuffle Runner for XrmToolBox</title>
+		<authors>Jonas Rapp, Imran Akram</authors>
+		<owners>rappen</owners>
+		<projectUrl>https://jonasr.app/shuffle/</projectUrl>
+		<iconUrl>https://jonasr.app/wp-content/uploads/Shuffle2-R.png</iconUrl>
+		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<description>
+The Shuffle Runner can both export and import data and solutions by the Shuffle schema definition file.
+
+Installing this tool, will also include the other tools for the Shuffle:
+Shuffle Builder and Shuffle Deployer.
+
+Read more: https://jonasr.app/shuffle
+		</description>
+		<summary>Export and Import with the Shuffle. Empower yourself to achieve more.</summary>
+		<releaseNotes>
+First officiall release!
+		</releaseNotes>
+		<copyright>Copyright 2023 Jonas Rapp, Imran Akram</copyright>
+		<tags>XrmToolBox Shuffle</tags>
+		<dependencies>
+			<dependency id="XrmToolBox" version="1.2022.11.59" />
+		</dependencies>
+	</metadata>
+	<files>
+		<file src="XTB\bin\Release\Rappen.XTB.Shuffle.dll" target="lib\net472\Plugins" />
+	</files>
+</package>

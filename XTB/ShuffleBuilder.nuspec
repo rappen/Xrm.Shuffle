@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<package>
+	<metadata>
+		<id>Rappen.XrmToolBox.Shuffle.Builder</id>
+		<version>1.0.0</version>
+		<title>Shuffle Builder for XrmToolBox</title>
+		<authors>Jonas Rapp, Imran Akram</authors>
+		<owners>rappen</owners>
+		<projectUrl>https://jonasr.app/shuffle/</projectUrl>
+		<iconUrl>https://jonasr.app/wp-content/uploads/Shuffle-2B.png</iconUrl>
+		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<description>
+The Shuffle Builder helps you to create schema definition files.
+
+Installing this tool, will also include the other tools for the Shuffle:
+Shuffle Runner and Shuffle Deployer.
+
+Read more: https://jonasr.app/shuffle
+		</description>
+		<summary>Build schema files for the Shuffle. Empower yourself to achieve more.</summary>
+		<releaseNotes>
+First officiall release!
+		</releaseNotes>
+		<copyright>Copyright 2023 Jonas Rapp, Imran Akram</copyright>
+		<tags>XrmToolBox Shuffle</tags>
+		<dependencies>
+			<dependency id="XrmToolBox" version="1.2022.11.59" />
+		</dependencies>
+	</metadata>
+	<files>
+		<file src="XTB\bin\Release\Rappen.XTB.Shuffle.dll" target="lib\net472\Plugins" />
+	</files>
+</package>

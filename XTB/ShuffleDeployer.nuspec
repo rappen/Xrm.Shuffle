@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<package>
+	<metadata>
+		<id>Rappen.XrmToolBox.Shuffle.Deployer</id>
+		<version>1.0.0</version>
+		<title>Shuffle Deployer for XrmToolBox</title>
+		<authors>Jonas Rapp, Imran Akram</authors>
+		<owners>rappen</owners>
+		<projectUrl>https://jonasr.app/shuffle/</projectUrl>
+		<iconUrl>https://jonasr.app/wp-content/uploads/Shuffle2-D.png</iconUrl>
+		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<description>
+The Shuffle Deployer can deploy datas and solutions defined by the Shuffle definitions in a controlled way - without advanced pipelines.
+
+Installing this tool, will also include the other tools for the Shuffle:
+Shuffle Builder and Shuffle Runner.
+
+Read more: https://jonasr.app/shuffle
+		</description>
+		<summary>Deploy solutions and datas with the Shuffle. Empower yourself to achieve more.</summary>
+		<releaseNotes>
+First officiall release!
+		</releaseNotes>
+		<copyright>Copyright 2023 Jonas Rapp, Imran Akram</copyright>
+		<tags>XrmToolBox Shuffle</tags>
+		<dependencies>
+			<dependency id="XrmToolBox" version="1.2022.11.59" />
+		</dependencies>
+	</metadata>
+	<files>
+		<file src="XTB\bin\Release\Rappen.XTB.Shuffle.dll" target="lib\net472\Plugins" />
+	</files>
+</package>
