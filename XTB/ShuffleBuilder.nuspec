@@ -28,6 +28,6 @@ First officiall release!
 		</dependencies>
 	</metadata>
 	<files>
-		<file src="XTB\bin\Release\Rappen.XTB.Shuffle.dll" target="lib\net472\Plugins" />
+		<file src="bin\Release\Rappen.XTB.Shuffle.dll" target="lib\net472\Plugins" />
 	</files>
 </package>
