@@ -1,9 +1,9 @@
 # Xrm.Shuffle for [XrmToolBox](https://www.xrmtoolbox.com/)
 
-[![Join the chat at https://gitter.im/Innofactor/Innofactor.Crm.CI](https://badges.gitter.im/Innofactor/Innofactor.Crm.CI.svg)](https://gitter.im/Innofactor/Innofactor.Crm.CI?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+### Shuffle Builder 👷‍♀️, Shuffle Runner 🏃 and Shuffle Deployer 🚚
+*Empower yourself to achieve more.*
 
-### Shuffle Builder, Shuffle Runner and Shuffle Deployer
-[XrmToolBox](http://www.xrmtoolbox.com) tools to help compose and run/test **Shuffle Definitions**.
+[XrmToolBox](http://www.xrmtoolbox.com) tools to help compose and run/test **Shuffle Schema Definitions**.
 
 ---
 ### *Shuffle tools are now available in the XrmToolBox Tool Library!* 🥳
