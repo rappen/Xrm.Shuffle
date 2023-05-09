@@ -6,7 +6,7 @@
 [XrmToolBox](http://www.xrmtoolbox.com) tools to help compose and run/test **Shuffle Definitions**.
 
 ---
-### *Soon to be available in the XrmToolBox Tool Library!*
+### *Shuffle tools are now available in the XrmToolBox Tool Library!* 🥳
 ---
 
 ## Home page
