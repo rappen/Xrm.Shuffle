@@ -21,13 +21,14 @@ Read more: https://jonasr.app/shuffle
 		<releaseNotes>
 First officiall release!
 		</releaseNotes>
-		<copyright>Copyright 2023 Jonas Rapp, Imran Akram</copyright>
+		<copyright>Copyright 2024 Jonas Rapp, Imran Akram</copyright>
 		<tags>XrmToolBox Shuffle</tags>
 		<dependencies>
-			<dependency id="XrmToolBox" version="1.2022.11.59" />
+			<dependency id="XrmToolBox" version="1.2023.10.67" />
 		</dependencies>
 	</metadata>
 	<files>
-		<file src="bin\Release\Rappen.XTB.Shuffle.dll" target="lib\net472\Plugins" />
+		<file src="bin\Release\Rappen.XTB.Shuffle.dll" target="lib\net48\Plugins" />
+		<file src="bin\Release\DotNetZip.dll" target="lib\net48\Plugins\Rappen.XrmToolBox.Shuffle.Deployer\DotNetZip.dll" />
 	</files>
 </package>
