@@ -3,7 +3,12 @@
 ### Shuffle Builder 👷‍♀️, Shuffle Runner 🏃 and Shuffle Deployer 🚚
 *Empower yourself to achieve more.*
 
+Created by [@rappen](https://github.com/rappen)
+<br/>
+Improving by [@imranakram](https://github.com/imranakram) & [@rappen](https://github.com/rappen)
+
 [XrmToolBox](http://www.xrmtoolbox.com) tools to help compose and run/test **Shuffle Schema Definitions**.
+
 
 ---
 ### *Shuffle tools are now available in the XrmToolBox Tool Library!* 🥳
