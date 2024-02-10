@@ -10,18 +10,18 @@
 		<iconUrl>https://jonasr.app/wp-content/uploads/Shuffle2-R.png</iconUrl>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
 		<description>
-The Shuffle Runner can both export and import data and solutions by the Shuffle schema definition file.
+			The Shuffle Runner can both export and import data and solutions by the Shuffle schema definition file.
 
-Installing this tool, will also include the other tools for the Shuffle:
-Shuffle Builder and Shuffle Deployer.
+			Installing this tool, will also include the other tools for the Shuffle:
+			Shuffle Builder and Shuffle Deployer.
 
-Read more: https://jonasr.app/shuffle
+			Read more: https://jonasr.app/shuffle
 		</description>
 		<summary>Export and Import with the Shuffle. Empower yourself to achieve more.</summary>
 		<releaseNotes>
-First officiall release!
+			First officiall release!
 		</releaseNotes>
-		<copyright>Copyright 2024 Jonas Rapp, Imran Akram</copyright>
+		<copyright>Copyright 2023-2024 Jonas Rapp, Imran Akram</copyright>
 		<tags>XrmToolBox Shuffle</tags>
 		<dependencies>
 			<dependency id="XrmToolBox" version="1.2023.10.67" />

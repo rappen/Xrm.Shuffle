@@ -10,18 +10,18 @@
 		<iconUrl>https://jonasr.app/wp-content/uploads/Shuffle-2B.png</iconUrl>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
 		<description>
-The Shuffle Builder helps you to create schema definition files.
+			The Shuffle Builder helps you to create schema definition files.
 
-Installing this tool, will also include the other tools for the Shuffle:
-Shuffle Runner and Shuffle Deployer.
+			Installing this tool, will also include the other tools for the Shuffle:
+			Shuffle Runner and Shuffle Deployer.
 
-Read more: https://jonasr.app/shuffle
+			Read more: https://jonasr.app/shuffle
 		</description>
 		<summary>Build schema files for the Shuffle. Empower yourself to achieve more.</summary>
 		<releaseNotes>
-First officiall release!
+			First officiall release!
 		</releaseNotes>
-		<copyright>Copyright 2024 Jonas Rapp, Imran Akram</copyright>
+		<copyright>Copyright 2023-2024 Jonas Rapp, Imran Akram</copyright>
 		<tags>XrmToolBox Shuffle</tags>
 		<dependencies>
 			<dependency id="XrmToolBox" version="1.2023.10.67" />
