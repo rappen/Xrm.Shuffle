@@ -13,6 +13,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "submodules", "submodules", 
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "Xrm.Utils.Core.Common", "Xrm.Utils.Core\Xrm.Utils.Core.Common\Xrm.Utils.Core.Common.shproj", "{A939CF3B-672A-4F68-8E6A-89EFE8C8CFBB}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{5DE162B2-F4D4-4D6E-BBA7-5F8DB8A14358}"
+	ProjectSection(SolutionItems) = preProject
+		XTB\ShuffleBuilder.nuspec = XTB\ShuffleBuilder.nuspec
+		XTB\ShuffleDeployer.nuspec = XTB\ShuffleDeployer.nuspec
+		XTB\ShuffleRunner.nuspec = XTB\ShuffleRunner.nuspec
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
