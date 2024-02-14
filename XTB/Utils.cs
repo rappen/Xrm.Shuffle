@@ -9,7 +9,7 @@ namespace Rappen.XTB.Shuffle
     public static class Utils
     {
         private static NameValueCollection commonparams = new NameValueCollection { { "utm_source", "Shuffle" }, { "utm_medium", "XrmToolBox" } };
-        private static NameValueCollection microsoftparams = new NameValueCollection { { "WT.mc_id", "BA-MVP-5002475" } };
+        private static NameValueCollection microsoftparams = new NameValueCollection { { "WT.mc_id", "DX-MVP-5002475" } };
 
         public static void OpenURL(string url)
         {
