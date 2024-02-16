@@ -86,7 +86,7 @@ namespace Rappen.XTB.Shuffle.Runner
                     EnableShuffle();
 
                     var definitionpath = Path.GetDirectoryName(txtFile.Text);
-                    var logPath = Path.Combine(definitionpath, DateTime.Now.ToString("yyyyMMdd") + "_" + DateTime.Now.ToString("HHmmss") + "_" + "ShuffleRunner" + "_" + ConnectionDetail + ".log");
+                    var logPath = Path.Combine(definitionpath, Path.GetFileNameWithoutExtension(txtFile.Text) + "_" + (rbExport.Checked ? "Export" : "Import") + "_" + ConnectionDetail + "_" + DateTime.Now.ToString("yyyyMMdd") + "_" + DateTime.Now.ToString("HHmmss") + ".log");
                     var container = new CintContainer(Service, logPath);
 
                     var location = System.Reflection.Assembly.GetExecutingAssembly().Location;
