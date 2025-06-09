@@ -281,14 +281,14 @@
         private Version ExtractVersionFromSolutionZip(string filename)
         {
             container.StartSection("ExtractVersionFromSolutionZip");
-            string solutionFilePath = Path.Combine(definitionpath, "solution.xml");
+            string solutionFilePath = Path.Combine(definitionPath, "solution.xml");
             using (var zip = ZipFile.OpenRead(filename))
             {
                 zip.GetEntry("solution.xml").ExtractToFile(solutionFilePath, true);
             }
             if (!File.Exists(solutionFilePath))
             {
-                throw new Exception($"Unable to unzip solution.xml from file: {filename}, invalid solution file.");
+                throw new FileNotFoundException($"Unable to unzip solution.xml from file: {filename}, invalid solution file.");
             }
             var xSolution = new XmlDocument();
             xSolution.Load(solutionFilePath);
@@ -323,9 +323,9 @@
                 file = block.Name;
             }
             var path = block.Path;
-            if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(definitionpath))
+            if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(definitionPath))
             {
-                path = definitionpath;
+                path = definitionPath;
             }
             path += path.EndsWith("\\") ? "" : "\\";
             string filename;

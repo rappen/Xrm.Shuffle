@@ -23,9 +23,9 @@
             container.Log("Block: {0}", name);
             var path = block.Path;
             var file = block.File;
-            if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(definitionpath))
+            if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(definitionPath))
             {
-                path = definitionpath;
+                path = definitionPath;
                 path += path.EndsWith("\\") ? "" : "\\";
             }
             if (string.IsNullOrWhiteSpace(file))

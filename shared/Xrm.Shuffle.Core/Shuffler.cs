@@ -33,7 +33,7 @@
         private readonly IExecutionContainer container;
         private XmlDocument definition;
 
-        private string definitionpath;
+        private string definitionPath;
         private Dictionary<Guid, Guid> guidmap = null;
         private ShuffleDefinition shuffledefinition;
         private bool stoponerror = false;
@@ -146,7 +146,7 @@
             }
             ShuffleHelper.VerifyShuffleVars(Definition, clearRemainingShuffleVars);
             shuffle.Definition = Definition;
-            shuffle.definitionpath = defpath;
+            shuffle.definitionPath = defpath;
             var blocks = shuffle.ExportFromCRM(container);
             var result = shuffle.Serialize(container, blocks, Type, Delimeter);
             container.EndSection();
@@ -190,7 +190,7 @@
             }
             ShuffleHelper.VerifyShuffleVars(Definition, clearRemainingShuffleVars);
             shuffle.Definition = Definition;
-            shuffle.definitionpath = defpath;
+            shuffle.definitionPath = defpath;
             var blocks = shuffle.Deserialize(container, Data);
             var result = shuffle.ImportToCRM(container, blocks);
             container.EndSection();
