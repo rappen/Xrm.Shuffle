@@ -3,7 +3,6 @@ using Xrm.Utils.Core.Common.Extensions;
 using Xrm.Utils.Core.Common.Interfaces;
 using Xrm.Utils.Core.Common.Loggers;
 using Xrm.Utils.Core.Common.Misc;
-using Ionic.Zip;
 using McTools.Xrm.Connection;
 using System;
 using System.Collections.Generic;
@@ -18,6 +17,7 @@ using System.Xml.Serialization;
 using XrmToolBox.Extensibility;
 using XrmToolBox.Extensibility.Interfaces;
 using System.Reflection;
+using System.IO.Compression;
 
 namespace Rappen.XTB.ShuffleDeployer
 {
@@ -343,15 +343,42 @@ namespace Rappen.XTB.ShuffleDeployer
 
         private void OpenAndLoadPackage(string filename)
         {
-            if (Path.GetExtension(filename).ToLowerInvariant().Equals(".cdzip"))
+            if (Path.GetExtension(filename).ToLowerInvariant() == ".cdzip")
             {
-                var folder = TempFolder + "\\" + DateTime.Now.ToString("yyyyMMddHHmmss");
-                using (var zip = new ZipFile(filename))
+                var folder = Path.Combine(TempFolder, DateTime.Now.ToString("yyyyMMddHHmmss"));
+                Directory.CreateDirectory(folder); // Ensure temp folder exists
+                string extractedCdpkgFile = null;
+
+                using (var archive = ZipFile.OpenRead(filename))
                 {
-                    zip.ExtractAll(folder, ExtractExistingFileAction.OverwriteSilently);
-                    filename = zip.Where(f => Path.GetExtension(f.FileName).ToLower() == ".cdpkg").FirstOrDefault().FileName;
+                    foreach (var entry in archive.Entries)
+                    {
+                        var fullPath = Path.Combine(folder, entry.FullName);
+
+                        // Ensure directory exists
+                        Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
+                        if (!string.IsNullOrEmpty(entry.Name)) // Skip folders
+                        {
+                            entry.ExtractToFile(fullPath, overwrite: true);
+
+                            if (extractedCdpkgFile == null &&
+                                Path.GetExtension(entry.Name).ToLowerInvariant() == ".cdpkg")
+                            {
+                                extractedCdpkgFile = entry.FullName;
+                            }
+                        }
+                    }
                 }
-                filename = Path.Combine(folder, filename);
+
+                if (!string.IsNullOrEmpty(extractedCdpkgFile))
+                {
+                    filename = Path.Combine(folder, extractedCdpkgFile);
+                }
+                else
+                {
+                    MessageBox.Show("No .cdpkg file found in the archive.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
             }
             packagefile = filename;
             btnOpenWF.Enabled = File.Exists(packagefile);
@@ -908,10 +935,14 @@ namespace Rappen.XTB.ShuffleDeployer
                     File.Delete(zipfile);
                 }
                 log.Log("Zipping package to: {0}", zipfile);
-                using (ZipFile zip = new ZipFile(zipfile))
+                using (var zipStream = new FileStream(zipfile, FileMode.Create))
+                using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create))
                 {
-                    zip.AddFiles(files, false, "");
-                    zip.Save();
+                    foreach (var file in files)
+                    {
+                        string entryName = Path.GetFileName(file); // Adds to root
+                        archive.CreateEntryFromFile(file, entryName);
+                    }
                 }
                 if (!tmpPackageFileExisted)
                 {   // Remove temporary package file if it did not exist
