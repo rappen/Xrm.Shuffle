@@ -478,7 +478,6 @@
   <ItemGroup>
     <Content Include="Deployer\CSD.ico" />
     <Content Include="Deployer\icon.png" />
-    <Content Include="Deployer\Ionic.Zip.xml" />
     <None Include="Images\Shuffle2-R-80.png" />
     <None Include="Images\Shuffle2-R-32.png" />
     <None Include="Images\Shuffle2-D-80.png" />
