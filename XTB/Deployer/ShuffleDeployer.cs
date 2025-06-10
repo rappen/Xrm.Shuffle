@@ -354,12 +354,19 @@ namespace Rappen.XTB.ShuffleDeployer
                     foreach (var entry in archive.Entries)
                     {
                         var fullPath = Path.Combine(folder, entry.FullName);
+                        var normalizedPath = Path.GetFullPath(fullPath);
+
+                        // Validate that the normalized path is within the target folder
+                        if (!normalizedPath.StartsWith(folder, StringComparison.Ordinal))
+                        {
+                            throw new InvalidOperationException($"Entry '{entry.FullName}' is attempting path traversal.");
+                        }
 
                         // Ensure directory exists
-                        Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
+                        Directory.CreateDirectory(Path.GetDirectoryName(normalizedPath));
                         if (!string.IsNullOrEmpty(entry.Name)) // Skip folders
                         {
-                            entry.ExtractToFile(fullPath, overwrite: true);
+                            entry.ExtractToFile(normalizedPath, overwrite: true);
 
                             if (extractedCdpkgFile == null &&
                                 Path.GetExtension(entry.Name).ToLowerInvariant() == ".cdpkg")
