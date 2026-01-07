@@ -160,7 +160,6 @@
                 {
                     cdAsyncOperation = null;
                     container.Log(asyncex);
-                    container.EndSection();   // Ending section started by Retrieve above to prevent indentation inflation
                 }
                 if (cdAsyncOperation != null)
                 {
@@ -244,7 +243,6 @@
                         {
                             container.Log(jobex);
                         }
-                        container.EndSection();   // Ending section started by Retrieve above to prevent indentation inflation
                     }
                 }
             }

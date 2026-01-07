@@ -19,12 +19,12 @@
 		</description>
 		<summary>Deploy solutions and datas with the Shuffle. Empower yourself to achieve more.</summary>
 		<releaseNotes>
-			Some under the hood changes
+			Updated dependencies and bug fixes.
 		</releaseNotes>
-		<copyright>Copyright 2023-2025 Jonas Rapp, Imran Akram</copyright>
+		<copyright>Copyright 2023-2026 Jonas Rapp, Imran Akram</copyright>
 		<tags>XrmToolBox Shuffle</tags>
 		<dependencies>
-			<dependency id="XrmToolBox" version="1.2023.10.67" />
+			<dependency id="XrmToolBox" version="1.2025.10.74" />
 		</dependencies>
 	</metadata>
 	<files>
