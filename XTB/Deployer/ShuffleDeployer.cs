@@ -355,15 +355,20 @@ namespace Rappen.XTB.ShuffleDeployer
                     {
                         var fullPath = Path.Combine(folder, entry.FullName);
                         var normalizedPath = Path.GetFullPath(fullPath);
+                        var normalizedFolder = Path.GetFullPath(folder) + Path.DirectorySeparatorChar;
 
                         // Validate that the normalized path is within the target folder
-                        if (!normalizedPath.StartsWith(folder, StringComparison.Ordinal))
+                        if (!normalizedPath.StartsWith(normalizedFolder, StringComparison.OrdinalIgnoreCase))
                         {
                             throw new InvalidOperationException($"Entry '{entry.FullName}' is attempting path traversal.");
                         }
 
                         // Ensure directory exists
-                        Directory.CreateDirectory(Path.GetDirectoryName(normalizedPath));
+                        var directoryPath = Path.GetDirectoryName(normalizedPath);
+                        if (!string.IsNullOrEmpty(directoryPath))
+                        {
+                            Directory.CreateDirectory(directoryPath);
+                        }
                         if (!string.IsNullOrEmpty(entry.Name)) // Skip folders
                         {
                             entry.ExtractToFile(normalizedPath, overwrite: true);

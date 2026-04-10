@@ -282,11 +282,12 @@
             string solutionFilePath = Path.Combine(definitionPath, "solution.xml");
             using (var zip = ZipFile.OpenRead(filename))
             {
-                zip.GetEntry("solution.xml").ExtractToFile(solutionFilePath, true);
-            }
-            if (!File.Exists(solutionFilePath))
-            {
-                throw new FileNotFoundException($"Unable to unzip solution.xml from file: {filename}, invalid solution file.");
+                var entry = zip.GetEntry("solution.xml");
+                if (entry == null)
+                {
+                    throw new FileNotFoundException($"Unable to unzip solution.xml from file: {filename}, invalid solution file.");
+                }
+                entry.ExtractToFile(solutionFilePath, true);
             }
             var xSolution = new XmlDocument();
             xSolution.Load(solutionFilePath);
