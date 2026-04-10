@@ -19,16 +19,16 @@
 		</description>
 		<summary>Export and Import with the Shuffle. Empower yourself to achieve more.</summary>
 		<releaseNotes>
-			First officiall release!
+			Updated dependencies and bug fixes.
 		</releaseNotes>
-		<copyright>Copyright 2023-2024 Jonas Rapp, Imran Akram</copyright>
+		<copyright>Copyright 2023-2026 Jonas Rapp, Imran Akram</copyright>
 		<tags>XrmToolBox Shuffle</tags>
 		<dependencies>
-			<dependency id="XrmToolBox" version="1.2023.10.67" />
+			<dependency id="XrmToolBox" version="1.2025.10.74" />
 		</dependencies>
 	</metadata>
 	<files>
 		<file src="bin\Release\Rappen.XTB.Shuffle.dll" target="lib\net48\Plugins" />
-		<file src="bin\Release\DotNetZip.dll" target="lib\net48\Plugins\Rappen.XrmToolBox.Shuffle.Deployer\DotNetZip.dll" />
+		<file src="bin\Release\System.IO.Compression.dll" target="lib\net48\Plugins\Rappen.XrmToolBox.Shuffle.Deployer\System.IO.Compression.dll" />
 	</files>
 </package>

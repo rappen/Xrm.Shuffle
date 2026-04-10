@@ -4,7 +4,6 @@
     using global::Xrm.Utils.Core.Common.Extensions;
     using global::Xrm.Utils.Core.Common.Interfaces;
     using global::Xrm.Utils.Core.Common.Misc;
-    using Ionic.Zip;
     using Microsoft.Crm.Sdk.Messages;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Messages;
@@ -12,6 +11,7 @@
     using System;
     using System.Collections;
     using System.IO;
+    using System.IO.Compression;
     using System.Reflection;
     using System.Xml;
 
@@ -160,7 +160,6 @@
                 {
                     cdAsyncOperation = null;
                     container.Log(asyncex);
-                    container.EndSection();   // Ending section started by Retrieve above to prevent indentation inflation
                 }
                 if (cdAsyncOperation != null)
                 {
@@ -244,7 +243,6 @@
                         {
                             container.Log(jobex);
                         }
-                        container.EndSection();   // Ending section started by Retrieve above to prevent indentation inflation
                     }
                 }
             }
@@ -281,17 +279,18 @@
         private Version ExtractVersionFromSolutionZip(string filename)
         {
             container.StartSection("ExtractVersionFromSolutionZip");
-            using (var zip = ZipFile.Read(filename))
+            string solutionFilePath = Path.Combine(definitionPath, "solution.xml");
+            using (var zip = ZipFile.OpenRead(filename))
             {
-                zip["solution.xml"].Extract(definitionpath, ExtractExistingFileAction.OverwriteSilently);
+                zip.GetEntry("solution.xml").ExtractToFile(solutionFilePath, true);
             }
-            if (!System.IO.File.Exists(definitionpath + "\\solution.xml"))
+            if (!File.Exists(solutionFilePath))
             {
-                throw new Exception("Unable to unzip solution.xml from file: " + filename);
+                throw new FileNotFoundException($"Unable to unzip solution.xml from file: {filename}, invalid solution file.");
             }
             var xSolution = new XmlDocument();
-            xSolution.Load(definitionpath + "\\solution.xml");
-            System.IO.File.Delete(definitionpath + "\\solution.xml");
+            xSolution.Load(solutionFilePath);
+            System.IO.File.Delete(solutionFilePath);
             var xRoot = XML.FindChild(xSolution, "ImportExportXml");
             if (xRoot == null)
             {
@@ -308,7 +307,7 @@
                 throw new XmlException("Cannot find element Version");
             }
             var version = new Version(xVersion.InnerText);
-            container.Log("Version {0} extracted", version);
+            container.Log($"Version {version} extracted");
             container.EndSection();
             return version;
         }
@@ -322,9 +321,9 @@
                 file = block.Name;
             }
             var path = block.Path;
-            if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(definitionpath))
+            if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(definitionPath))
             {
-                path = definitionpath;
+                path = definitionPath;
             }
             path += path.EndsWith("\\") ? "" : "\\";
             string filename;
