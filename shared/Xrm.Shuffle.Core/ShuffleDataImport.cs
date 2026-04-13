@@ -72,7 +72,9 @@
                         }
                         else
                         {
-                            matchvalue = container.Attribute(matchdisplay).On(cdEntity).ToString();
+                            matchvalue = cdEntity.FormattedValues.Contains(matchdisplay)
+                                ? cdEntity.FormattedValues[matchdisplay]
+                                : cdEntity[matchdisplay]?.ToString() ?? "";
                         }
                     }
                     unique.Add(matchvalue);
