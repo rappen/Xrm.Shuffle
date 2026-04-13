@@ -5,7 +5,7 @@
 		<version>1.0.0</version>
 		<title>Shuffle Deployer for XrmToolBox</title>
 		<authors>Jonas Rapp, Imran Akram</authors>
-		<owners>rappen</owners>
+		<owners>rappen, imranakram</owners>
 		<projectUrl>https://jonasr.app/shuffle/</projectUrl>
 		<iconUrl>https://jonasr.app/wp-content/uploads/Shuffle2-D.png</iconUrl>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
