@@ -34,6 +34,5 @@
 	</metadata>
 	<files>
 		<file src="bin\Release\Rappen.XTB.Shuffle.dll" target="lib\net48\Plugins" />
-		<file src="bin\Release\System.IO.Compression.dll" target="lib\net48\Plugins\Rappen.XrmToolBox.Shuffle.Deployer\System.IO.Compression.dll" />
 	</files>
 </package>
