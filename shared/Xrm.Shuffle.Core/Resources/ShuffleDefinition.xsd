@@ -263,7 +263,11 @@
         <xs:documentation>DEPRECATED. Use Save attribute instead.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <!--<xs:attribute name="ExecuteMultiple" type="xs:boolean" use="optional" default="false" />-->
+    <xs:attribute name="BatchSize" type="xs:int" use="optional" default="200">
+      <xs:annotation>
+        <xs:documentation>Number of records per ExecuteMultipleRequest batch. Set to 1 to disable batching. Max 1000.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
   </xs:complexType>
 
 

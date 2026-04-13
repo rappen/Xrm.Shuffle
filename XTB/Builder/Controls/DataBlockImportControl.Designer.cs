@@ -41,6 +41,8 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             this.txtOverwrite = new System.Windows.Forms.TextBox();
             this.label7 = new System.Windows.Forms.Label();
             this.chkUpdateIdentical = new System.Windows.Forms.CheckBox();
+            this.label8 = new System.Windows.Forms.Label();
+            this.txtBatchSize = new System.Windows.Forms.TextBox();
             this.SuspendLayout();
             // 
             // chkCreateWithId
@@ -77,7 +79,7 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             "Never"});
             this.cmbSave.Location = new System.Drawing.Point(213, 31);
             this.cmbSave.Name = "cmbSave";
-            this.cmbSave.Size = new System.Drawing.Size(234, 21);
+            this.cmbSave.Size = new System.Drawing.Size(236, 21);
             this.cmbSave.TabIndex = 6;
             this.cmbSave.Tag = "Save|false|CreateUpdate";
             // 
@@ -113,7 +115,7 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             "All"});
             this.cmbDelete.Location = new System.Drawing.Point(213, 58);
             this.cmbDelete.Name = "cmbDelete";
-            this.cmbDelete.Size = new System.Drawing.Size(234, 21);
+            this.cmbDelete.Size = new System.Drawing.Size(236, 21);
             this.cmbDelete.TabIndex = 8;
             this.cmbDelete.Tag = "Delete|false|None";
             // 
@@ -184,10 +186,29 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             this.chkUpdateIdentical.Tag = "UpdateIdentical|false|false";
             this.chkUpdateIdentical.UseVisualStyleBackColor = true;
             // 
+            // label8
+            // 
+            this.label8.AutoSize = true;
+            this.label8.Location = new System.Drawing.Point(4, 138);
+            this.label8.Name = "label8";
+            this.label8.Size = new System.Drawing.Size(56, 13);
+            this.label8.TabIndex = 21;
+            this.label8.Text = "Batch size";
+            // 
+            // txtBatchSize
+            // 
+            this.txtBatchSize.Location = new System.Drawing.Point(213, 135);
+            this.txtBatchSize.Name = "txtBatchSize";
+            this.txtBatchSize.Size = new System.Drawing.Size(80, 20);
+            this.txtBatchSize.TabIndex = 22;
+            this.txtBatchSize.Tag = "BatchSize|false|200";
+            // 
             // DataBlockImportControl
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.Controls.Add(this.label8);
+            this.Controls.Add(this.txtBatchSize);
             this.Controls.Add(this.label7);
             this.Controls.Add(this.chkUpdateIdentical);
             this.Controls.Add(this.txtOverwrite);
@@ -202,7 +223,22 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             this.Controls.Add(this.label1);
             this.Controls.Add(this.chkCreateWithId);
             this.Name = "DataBlockImportControl";
-            this.Size = new System.Drawing.Size(450, 205);
+            this.Size = new System.Drawing.Size(452, 258);
+            this.Controls.SetChildIndex(this.chkCreateWithId, 0);
+            this.Controls.SetChildIndex(this.label1, 0);
+            this.Controls.SetChildIndex(this.cmbSave, 0);
+            this.Controls.SetChildIndex(this.label2, 0);
+            this.Controls.SetChildIndex(this.cmbDelete, 0);
+            this.Controls.SetChildIndex(this.label3, 0);
+            this.Controls.SetChildIndex(this.chkUpdateInactive, 0);
+            this.Controls.SetChildIndex(this.label4, 0);
+            this.Controls.SetChildIndex(this.lblDeprecated, 0);
+            this.Controls.SetChildIndex(this.lblDeprOverwrite, 0);
+            this.Controls.SetChildIndex(this.txtOverwrite, 0);
+            this.Controls.SetChildIndex(this.chkUpdateIdentical, 0);
+            this.Controls.SetChildIndex(this.label7, 0);
+            this.Controls.SetChildIndex(this.txtBatchSize, 0);
+            this.Controls.SetChildIndex(this.label8, 0);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -223,5 +259,7 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
         private System.Windows.Forms.TextBox txtOverwrite;
         private System.Windows.Forms.Label label7;
         private System.Windows.Forms.CheckBox chkUpdateIdentical;
+        private System.Windows.Forms.Label label8;
+        private System.Windows.Forms.TextBox txtBatchSize;
     }
 }
