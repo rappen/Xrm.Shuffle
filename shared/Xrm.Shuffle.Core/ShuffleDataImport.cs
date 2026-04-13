@@ -6,6 +6,7 @@
     using global::Xrm.Utils.Core.Common.Misc;
     using Microsoft.Crm.Sdk.Messages;
     using Microsoft.Xrm.Sdk;
+    using Microsoft.Xrm.Sdk.Messages;
     using Microsoft.Xrm.Sdk.Query;
     using System;
     using System.Collections.Generic;
@@ -242,18 +243,15 @@
 
         private List<string> GetUpdateAttributes(EntityCollection entities)
         {
-            var result = new List<string>();
+            var result = new HashSet<string>();
             foreach (var entity in entities.Entities)
             {
                 foreach (var attribute in entity.Attributes.Keys)
                 {
-                    if (!result.Contains(attribute))
-                    {
-                        result.Add(attribute);
-                    }
+                    result.Add(attribute);
                 }
             }
-            return result;
+            return result.ToList();
         }
 
         private Tuple<int, int, int, int, int, EntityReferenceCollection> ImportDataBlock(IExecutionContainer container, DataBlock block, EntityCollection cEntities)
@@ -286,6 +284,7 @@
                 var matchattributes = GetMatchAttributes(block.Import.Match);
                 var updateattributes = !updateidentical ? GetUpdateAttributes(cEntities) : new List<string>();
                 var preretrieveall = block.Import.Match?.PreRetrieveAll == true;
+                var batchsize = Math.Max(1, Math.Min(block.Import.BatchSize, 1000));
 
                 SendLine(container);
                 SendLine(container, $"Importing block {name} - {cEntities.Count()} records ");
@@ -299,33 +298,25 @@
 
                     qDelete.ColumnSet.AddColumn(container.Entity(entity).PrimaryNameAttribute);
                     var deleterecords = container.RetrieveMultiple(qDelete);
-                    //var deleterecords = Entity.RetrieveMultiple(crmsvc, qDelete, log);
                     SendLine(container, $"Deleting ALL {entity} - {deleterecords.Count()} records");
+                    var deleteBatch = new List<Entity>();
                     foreach (var record in deleterecords.Entities)
                     {
                         SendLine(container, "{0:000} Deleting existing: {1}", i, record);
-                        try
+                        deleteBatch.Add(record);
+                        if (deleteBatch.Count >= batchsize)
                         {
-                            container.Delete(record);
-                            deleted++;
-                        }
-                        catch (FaultException<OrganizationServiceFault> ex)
-                        {
-                            if (ex.Message.ToUpperInvariant().Contains("DOES NOT EXIST"))
-                            {   // This may happen through delayed cascade delete in CRM
-                                SendLine(container, "      ...already deleted");
-                            }
-                            else
-                            {
-                                throw;
-                            }
+                            FlushPendingDeletes(container, deleteBatch, ref deleted, ref failed);
                         }
                         i++;
                     }
+                    FlushPendingDeletes(container, deleteBatch, ref deleted, ref failed);
                 }
                 var totalRecords = cEntities.Count();
                 i = 1;
                 EntityCollection cAllRecordsToMatch = null;
+                var pendingCreates = new List<PendingCreate>();
+                var pendingUpdates = new List<PendingUpdate>();
                 foreach (var cdEntity in cEntities.Entities)
                 {
                     var unique = cdEntity.Id.ToString();
@@ -357,19 +348,38 @@
                                     {
                                         cdEntity.Id = Guid.Empty;
                                     }
-                                    if (SaveEntity(container, cdEntity, null, updateinactive, updateidentical, i, unique))
+                                    if (IsBatchable(cdEntity))
                                     {
-                                        created++;
-                                        newid = cdEntity.Id;
-                                        references.Add(cdEntity.ToEntityReference());
+                                        pendingCreates.Add(new PendingCreate { Entity = cdEntity, OldId = oldid, Position = i, Identifier = unique });
+                                        if (pendingCreates.Count >= batchsize)
+                                        {
+                                            FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                        FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+                                        if (SaveEntity(container, cdEntity, null, updateinactive, updateidentical, i, unique))
+                                        {
+                                            created++;
+                                            newid = cdEntity.Id;
+                                            references.Add(cdEntity.ToEntityReference());
+                                        }
                                     }
                                 }
                             }
                             else
                             {
+                                // Flush batches before matching to ensure guidmap is up to date
+                                if (pendingCreates.Count > 0)
+                                {
+                                    FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                }
                                 var matches = GetMatchingRecords(container, cdEntity, matchattributes, updateattributes, preretrieveall, ref cAllRecordsToMatch);
                                 if (delete == DeleteTypes.All || (matches.Count() == 1 && delete == DeleteTypes.Existing))
                                 {
+                                    FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
                                     foreach (var cdMatch in matches.Entities)
                                     {
                                         SendLine(container, "{0:000} Deleting existing: {1}", i, unique);
@@ -405,11 +415,24 @@
                                         {
                                             cdEntity.Id = Guid.Empty;
                                         }
-                                        if (SaveEntity(container, cdEntity, null, updateinactive, updateidentical, i, unique))
+                                        if (IsBatchable(cdEntity))
                                         {
-                                            created++;
-                                            newid = cdEntity.Id;
-                                            references.Add(cdEntity.ToEntityReference());
+                                            pendingCreates.Add(new PendingCreate { Entity = cdEntity, OldId = oldid, Position = i, Identifier = unique });
+                                            if (pendingCreates.Count >= batchsize)
+                                            {
+                                                FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                            FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+                                            if (SaveEntity(container, cdEntity, null, updateinactive, updateidentical, i, unique))
+                                            {
+                                                created++;
+                                                newid = cdEntity.Id;
+                                                references.Add(cdEntity.ToEntityReference());
+                                            }
                                         }
                                     }
                                 }
@@ -419,14 +442,42 @@
                                     newid = match.Id;
                                     if (save == SaveTypes.CreateUpdate || save == SaveTypes.UpdateOnly)
                                     {
-                                        if (SaveEntity(container, cdEntity, match, updateinactive, updateidentical, i, unique))
+                                        if (IsBatchable(cdEntity))
                                         {
-                                            updated++;
-                                            references.Add(cdEntity.ToEntityReference());
+                                            cdEntity.Id = match.Id;
+                                            var primaryIdAttribute = container.Entity(cdEntity.LogicalName).PrimaryIdAttribute;
+                                            var attrs = cdEntity.Attributes.Keys.ToList();
+                                            if (attrs.Contains(primaryIdAttribute))
+                                            {
+                                                attrs.Remove(primaryIdAttribute);
+                                            }
+                                            if (updateidentical || !EntityAttributesEqual(container, attrs, cdEntity, match))
+                                            {
+                                                pendingUpdates.Add(new PendingUpdate { Entity = cdEntity, Position = i, Identifier = unique });
+                                                if (pendingUpdates.Count >= batchsize)
+                                                {
+                                                    FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+                                                }
+                                            }
+                                            else
+                                            {
+                                                skipped++;
+                                                SendLine(container, "{0:000} Skipped: {1} (Identical)", i, unique);
+                                            }
                                         }
                                         else
                                         {
-                                            skipped++;
+                                            FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                            FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+                                            if (SaveEntity(container, cdEntity, match, updateinactive, updateidentical, i, unique))
+                                            {
+                                                updated++;
+                                                references.Add(cdEntity.ToEntityReference());
+                                            }
+                                            else
+                                            {
+                                                skipped++;
+                                            }
                                         }
                                     }
                                     else
@@ -454,6 +505,9 @@
                         {
                             #region Intersect
 
+                            FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                            FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+
                             if (cdEntity.Attributes.Count != 2)
                             {
                                 throw new ArgumentOutOfRangeException("Attributes", cdEntity.Attributes.Count, "Invalid Attribute count for intersect object");
@@ -467,12 +521,11 @@
                             var ref1 = GetAttributeEntityReference(cdEntity.Attributes.ElementAt(0));
                             var ref2 = GetAttributeEntityReference(cdEntity.Attributes.ElementAt(1));
 
-                            var party1 = new Entity(ref1.LogicalName, ref1.Id); //Entity.InitFromNameAndId(ref1.LogicalName, ref1.Id, crmsvc, log);
-                            var party2 = new Entity(ref2.LogicalName, ref2.Id); //Entity.InitFromNameAndId(ref2.LogicalName, ref2.Id, crmsvc, log);
+                            var party1 = new Entity(ref1.LogicalName, ref1.Id);
+                            var party2 = new Entity(ref2.LogicalName, ref2.Id);
                             try
                             {
                                 container.Associate(party1, party2, intersect);
-                                //party1.Associate(party2, intersect);
                                 created++;
                                 SendLine(container, "{0} Associated: {1}", i.ToString().PadLeft(3, '0'), name);
                             }
@@ -504,6 +557,8 @@
                     }
                     i++;
                 }
+                FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
 
                 SendLine(container, $"Created: {created} Updated: {updated} Skipped: {skipped} Deleted: {deleted} Failed: {failed}");
             }
@@ -596,10 +651,11 @@
 
                 if (nowActive)
                 {
+                    var primaryIdAttribute = container.Entity(cdNewEntity.LogicalName).PrimaryIdAttribute;
                     var updateattributes = cdNewEntity.Attributes.Keys.ToList();
-                    if (updateattributes.Contains(container.Entity(cdNewEntity.LogicalName).PrimaryIdAttribute))
+                    if (updateattributes.Contains(primaryIdAttribute))
                     {
-                        updateattributes.Remove(container.Entity(cdNewEntity.LogicalName).PrimaryIdAttribute);
+                        updateattributes.Remove(primaryIdAttribute);
                     }
                     if (updateIdentical || !EntityAttributesEqual(container, updateattributes, cdNewEntity, cdMatchEntity))
                     {
@@ -609,10 +665,10 @@
                             recordSaved = true;
                             SendLine(container, "{0:000} Updated: {1}", pos, identifier);
                         }
-                        catch (Exception)
+                        catch (Exception ex)
                         {
                             recordSaved = false;
-                            SendLine(container, "{0:000} Update Failed: {1} {2} {3}", pos, identifier, cdNewEntity.LogicalName);
+                            SendLine(container, "{0:000} Update Failed: {1} {2} {3}", pos, identifier, cdNewEntity.LogicalName, ex.Message);
                         }
                     }
                     else
@@ -661,6 +717,306 @@
             container.EndSection();
             return recordSaved;
         }
+
+        #region Batch Helpers
+
+        private const int DefaultBatchSize = 200;
+
+        private struct PendingCreate
+        {
+            public Entity Entity;
+            public Guid OldId;
+            public int Position;
+            public string Identifier;
+        }
+
+        private struct PendingUpdate
+        {
+            public Entity Entity;
+            public int Position;
+            public string Identifier;
+        }
+
+        private void FlushPendingCreates(IExecutionContainer container, List<PendingCreate> batch, ref int created, ref int failed, EntityReferenceCollection references)
+        {
+            if (batch.Count == 0)
+            {
+                return;
+            }
+            if (batch.Count == 1)
+            {
+                var item = batch[0];
+                try
+                {
+                    container.Create(item.Entity);
+                    created++;
+                    SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                    references.Add(item.Entity.ToEntityReference());
+                    MapGuid(item.OldId, item.Entity.Id);
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
+                    if (stoponerror)
+                    {
+                        throw;
+                    }
+                }
+                batch.Clear();
+                return;
+            }
+            var multiRequest = new ExecuteMultipleRequest
+            {
+                Requests = new OrganizationRequestCollection(),
+                Settings = new ExecuteMultipleSettings
+                {
+                    ContinueOnError = !stoponerror,
+                    ReturnResponses = true
+                }
+            };
+            foreach (var item in batch)
+            {
+                multiRequest.Requests.Add(new CreateRequest { Target = item.Entity });
+            }
+            container.Log($"Executing batch create of {batch.Count} records");
+            try
+            {
+                var multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
+                for (var i = 0; i < batch.Count; i++)
+                {
+                    var item = batch[i];
+                    var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+                    if (responseItem?.Fault != null)
+                    {
+                        failed++;
+                        SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, responseItem.Fault.Message);
+                    }
+                    else
+                    {
+                        if (responseItem?.Response is CreateResponse createResponse)
+                        {
+                            item.Entity.Id = createResponse.id;
+                        }
+                        created++;
+                        SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                        references.Add(item.Entity.ToEntityReference());
+                        MapGuid(item.OldId, item.Entity.Id);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                container.Log($"Batch create failed: {ex.Message}");
+                container.Log("Falling back to sequential creates");
+                foreach (var item in batch)
+                {
+                    try
+                    {
+                        container.Create(item.Entity);
+                        created++;
+                        SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                        references.Add(item.Entity.ToEntityReference());
+                        MapGuid(item.OldId, item.Entity.Id);
+                    }
+                    catch (Exception itemEx)
+                    {
+                        failed++;
+                        SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, itemEx.Message);
+                        if (stoponerror)
+                        {
+                            throw;
+                        }
+                    }
+                }
+            }
+            batch.Clear();
+        }
+
+        private void FlushPendingUpdates(IExecutionContainer container, List<PendingUpdate> batch, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            if (batch.Count == 0)
+            {
+                return;
+            }
+            if (batch.Count == 1)
+            {
+                var item = batch[0];
+                try
+                {
+                    container.Update(item.Entity);
+                    updated++;
+                    SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                    references.Add(item.Entity.ToEntityReference());
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, ex.Message);
+                    if (stoponerror)
+                    {
+                        throw;
+                    }
+                }
+                batch.Clear();
+                return;
+            }
+            var multiRequest = new ExecuteMultipleRequest
+            {
+                Requests = new OrganizationRequestCollection(),
+                Settings = new ExecuteMultipleSettings
+                {
+                    ContinueOnError = !stoponerror,
+                    ReturnResponses = true
+                }
+            };
+            foreach (var item in batch)
+            {
+                multiRequest.Requests.Add(new UpdateRequest { Target = item.Entity });
+            }
+            container.Log($"Executing batch update of {batch.Count} records");
+            try
+            {
+                var multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
+                for (var i = 0; i < batch.Count; i++)
+                {
+                    var item = batch[i];
+                    var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+                    if (responseItem?.Fault != null)
+                    {
+                        failed++;
+                        SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, responseItem.Fault.Message);
+                    }
+                    else
+                    {
+                        updated++;
+                        SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                        references.Add(item.Entity.ToEntityReference());
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                container.Log($"Batch update failed: {ex.Message}");
+                container.Log("Falling back to sequential updates");
+                foreach (var item in batch)
+                {
+                    try
+                    {
+                        container.Update(item.Entity);
+                        updated++;
+                        SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                        references.Add(item.Entity.ToEntityReference());
+                    }
+                    catch (Exception itemEx)
+                    {
+                        failed++;
+                        SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, itemEx.Message);
+                        if (stoponerror)
+                        {
+                            throw;
+                        }
+                    }
+                }
+            }
+            batch.Clear();
+        }
+
+        private void FlushPendingDeletes(IExecutionContainer container, List<Entity> batch, ref int deleted, ref int failed)
+        {
+            if (batch.Count == 0)
+            {
+                return;
+            }
+            if (batch.Count == 1)
+            {
+                container.Delete(batch[0]);
+                deleted++;
+                batch.Clear();
+                return;
+            }
+            var multiRequest = new ExecuteMultipleRequest
+            {
+                Requests = new OrganizationRequestCollection(),
+                Settings = new ExecuteMultipleSettings
+                {
+                    ContinueOnError = !stoponerror,
+                    ReturnResponses = true
+                }
+            };
+            foreach (var entity in batch)
+            {
+                multiRequest.Requests.Add(new DeleteRequest { Target = entity.ToEntityReference() });
+            }
+            container.Log($"Executing batch delete of {batch.Count} records");
+            try
+            {
+                var multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
+                for (var i = 0; i < batch.Count; i++)
+                {
+                    var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+                    if (responseItem?.Fault != null)
+                    {
+                        if (responseItem.Fault.Message.ToUpperInvariant().Contains("DOES NOT EXIST"))
+                        {
+                            SendLine(container, "      ...already deleted");
+                        }
+                        else
+                        {
+                            failed++;
+                            SendLine(container, "Delete Failed: {0} {1}", batch[i].LogicalName, responseItem.Fault.Message);
+                        }
+                    }
+                    else
+                    {
+                        deleted++;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                container.Log($"Batch delete failed: {ex.Message}");
+                container.Log("Falling back to sequential deletes");
+                foreach (var entity in batch)
+                {
+                    try
+                    {
+                        container.Delete(entity);
+                        deleted++;
+                    }
+                    catch (FaultException<OrganizationServiceFault> fex)
+                    {
+                        if (fex.Message.ToUpperInvariant().Contains("DOES NOT EXIST"))
+                        {
+                            SendLine(container, "      ...already deleted");
+                        }
+                        else
+                        {
+                            throw;
+                        }
+                    }
+                }
+            }
+            batch.Clear();
+        }
+
+        private void MapGuid(Guid oldId, Guid newId)
+        {
+            if (!oldId.Equals(Guid.Empty) && !newId.Equals(Guid.Empty) && !oldId.Equals(newId) && !guidmap.ContainsKey(oldId))
+            {
+                guidmap.Add(oldId, newId);
+            }
+        }
+
+        /// <summary>
+        /// Determines if a record can be saved with a simple Create or Update (no state changes, no owner reassignment).
+        /// </summary>
+        private static bool IsBatchable(Entity entity)
+        {
+            return !entity.Contains("statecode") && !entity.Contains("statuscode") && !entity.Contains("ownerid");
+        }
+
+        #endregion Batch Helpers
 
         #endregion Private Methods
     }

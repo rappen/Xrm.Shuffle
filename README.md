@@ -14,6 +14,24 @@ Improving by [@imranakram](https://github.com/imranakram) & [@rappen](https://gi
 ### *Shuffle tools are now available in the XrmToolBox Tool Library!* 🥳
 ---
 
+## Recent Changes
+
+### Multi-Select OptionSet support
+Export and import of Multi-Select OptionSet (OptionSetValueCollection) fields now works correctly. Previously, exported data.xml contained the literal string "OptionSetValueCollection" instead of actual values.
+
+### ExecuteMultipleRequest batching
+Import operations (Create, Update, Delete) are now batched using `ExecuteMultipleRequest` for significantly improved performance on large datasets. Configurable via the `BatchSize` attribute on the Import element (default: 200, max: 1000). Set to 1 to disable batching. The Shuffle Builder UI includes a new "Batch size" field.
+
+### Deterministic XML export ordering
+Entity attributes are now sorted alphabetically during export, eliminating spurious diffs in version control when re-exporting unchanged data.
+
+### Bug fixes and performance improvements
+- Fixed off-by-one error in CSV/text export that could cause an IndexOutOfRangeException
+- Metadata lookups (PrimaryIdAttribute) hoisted out of inner loops to reduce overhead
+- Replaced O(n) list searches with HashSet for attribute deduplication during import
+- Replaced O(n^2) attribute filtering in SelectAttributes with single-pass LINQ approach
+- Update failures now log the exception message for easier diagnostics
+
 ## Home page
 https://jonasr.app/shuffle/
 

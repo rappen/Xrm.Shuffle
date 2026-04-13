@@ -19,9 +19,14 @@
 		</description>
 		<summary>Build schema files for the Shuffle. Empower yourself to achieve more.</summary>
 		<releaseNotes>
-			Updated dependencies and bug fixes.
+- New Batch size field on Import configuration for ExecuteMultipleRequest batching
+- Multi-Select OptionSet (OptionSetValueCollection) export/import support
+- Deterministic attribute ordering in XML export for clean version control diffs
+- Fixed off-by-one error in CSV/text export
+- Performance improvements: metadata lookup hoisting, HashSet deduplication, optimized attribute filtering
+- Update failure messages now include exception details
 		</releaseNotes>
-		<copyright>Copyright 2023-2025 Jonas Rapp, Imran Akram</copyright>
+		<copyright>Copyright 2023-2026 Jonas Rapp, Imran Akram</copyright>
 		<tags>XrmToolBox Shuffle</tags>
 		<dependencies>
 			<dependency id="XrmToolBox" version="1.2025.10.74" />

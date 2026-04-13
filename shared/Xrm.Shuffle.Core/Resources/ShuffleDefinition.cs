@@ -87,17 +87,23 @@ namespace Cinteros.Crm.Utils.Shuffle.Types {
         /// <remarks/>
         [System.Xml.Serialization.XmlAttributeAttribute()]
         public bool Overwrite;
-        
+
         /// <remarks/>
         [System.Xml.Serialization.XmlIgnoreAttribute()]
         public bool OverwriteSpecified;
-        
+
+        /// <summary>Number of records per ExecuteMultipleRequest batch. Set to 1 to disable batching. Max 1000.</summary>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        [System.ComponentModel.DefaultValueAttribute(200)]
+        public int BatchSize;
+
         public DataBlockImport() {
             this.CreateWithId = false;
             this.Save = SaveTypes.CreateUpdate;
             this.Delete = DeleteTypes.None;
             this.UpdateInactive = false;
             this.UpdateIdentical = false;
+            this.BatchSize = 200;
         }
     }
     
