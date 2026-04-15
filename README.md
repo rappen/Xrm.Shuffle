@@ -157,11 +157,47 @@ Choose one of two query modes:
 
 > **DeferStateAndOwner optimization:** When `DeferStateAndOwner="true"`, records with `statecode`, `statuscode`, or `ownerid` attributes are still imported using bulk operations — these attributes are temporarily stripped, the records are batched, and then state/owner changes are applied in a second pass. This can achieve **3-5× performance improvement** on datasets where most records include state or owner information. Use this when migrating data between environments where preserving state/owner is important.
 
+#### Import Path Selection
+
+Shuffle automatically selects the optimal import strategy based on your configuration. Understanding when each path is used helps you configure imports for best performance.
+
+**Upsert Path** (fastest, Dataverse only) — Used when ALL of these conditions are met:
+- `Save="CreateUpdate"` — records may be created or updated
+- `CreateWithId="true"` — records include their primary key
+- `<Match>` has one or more attributes defined
+- `Delete="None"` (or not specified) — no deletion of existing records
+
+When the Upsert path is active:
+- ✅ **UpsertMultiple** sends records directly to Dataverse without pre-querying
+- ✅ `PreRetrieveAll` is **automatically bypassed** (not needed since Dataverse decides create vs update)
+- ✅ No match queries are executed — Dataverse handles matching internally using the record's primary key
+- ⚠️ Falls back gracefully on CRM 9.1 on-premises (ExecuteMultiple + Upsert) or CRM 8.x (individual Create/Update)
+
+**Match-based Path** (traditional) — Used when ANY of these conditions apply:
+- `Save="CreateOnly"` or `Save="UpdateOnly"` — one-directional operations
+- `CreateWithId="false"` — records don't include their primary key
+- `Delete="Existing"` or `Delete="All"` — deletion requires knowing which records exist
+- No `<Match>` attributes defined — no way to identify existing records
+
+When the Match-based path is active:
+- 🔍 Each record is matched against target using `<Match>` attributes
+- 🔍 `PreRetrieveAll="true"` fetches all target records up-front (recommended for large imports on small-to-medium target datasets)
+- 🔍 `PreRetrieveAll="false"` (default) queries for matches per-record (better for small imports or very large target datasets)
+
+| Configuration | Import Path | PreRetrieveAll Effect |
+|---------------|-------------|----------------------|
+| `Save="CreateUpdate"` + `CreateWithId="true"` + Match defined + `Delete="None"` | Upsert | Bypassed (not needed) |
+| `Save="CreateUpdate"` + `CreateWithId="false"` | Match-based | Active |
+| `Save="CreateOnly"` (any other flags) | Match-based | Active |
+| `Save="UpdateOnly"` (any other flags) | Match-based | Active |
+| `Delete="Existing"` or `Delete="All"` | Match-based | Active |
+| No `<Match>` defined | Direct Create | N/A (no matching) |
+
 `<Match>` — controls how the importer finds existing target records to decide whether to create or update:
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `PreRetrieveAll` | boolean | `false` | Fetch all existing target records up-front before import starts. **Note:** When UpsertMultiple is available (Dataverse + `CreateWithId="true"`), this flag is automatically bypassed since Upsert eliminates the need for pre-retrieval queries. On CRM 9.1 on-premises or older, this flag still provides significant performance benefits for large imports on small-to-medium target datasets. |
+| `PreRetrieveAll` | boolean | `false` | Fetch all existing target records up-front before import starts. Only applies when using the **Match-based path** (see Import Path Selection above). Recommended for large imports targeting small-to-medium datasets. When the **Upsert path** is active, this flag is automatically bypassed. |
 
 Add one or more `<Attribute Name="..." Display="...">` children — these are the fields used to match incoming records against existing target records. `Display` is an optional alternate attribute used for the matched value in log output.
 
