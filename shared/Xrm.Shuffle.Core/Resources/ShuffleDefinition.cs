@@ -97,6 +97,11 @@ namespace Cinteros.Crm.Utils.Shuffle.Types {
         [System.ComponentModel.DefaultValueAttribute(100)]
         public int BatchSize;
 
+        /// <summary>Strip statecode/statuscode/ownerid from records during import and apply them in a second pass using bulk operations. Significantly improves performance for datasets with state/owner attributes. Default: false.</summary>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        [System.ComponentModel.DefaultValueAttribute(false)]
+        public bool DeferStateAndOwner;
+
         public DataBlockImport() {
             this.CreateWithId = false;
             this.Save = SaveTypes.CreateUpdate;
@@ -104,6 +109,7 @@ namespace Cinteros.Crm.Utils.Shuffle.Types {
             this.UpdateInactive = false;
             this.UpdateIdentical = false;
             this.BatchSize = 100;
+            this.DeferStateAndOwner = false;
         }
     }
     
