@@ -17,6 +17,27 @@
 
     public partial class Shuffler
     {
+        #region Bulk Operation Support Cache
+
+        /// <summary>
+        /// Cache for CreateMultiple support per entity logical name.
+        /// True = supported, False = not supported, null = not yet checked.
+        /// </summary>
+        private Dictionary<string, bool> createMultipleSupportCache = new Dictionary<string, bool>();
+
+        /// <summary>
+        /// Cache for UpdateMultiple support per entity logical name.
+        /// True = supported, False = not supported, null = not yet checked.
+        /// </summary>
+        private Dictionary<string, bool> updateMultipleSupportCache = new Dictionary<string, bool>();
+
+        /// <summary>
+        /// Fault code indicating the message is not implemented (used for on-premises fallback detection).
+        /// </summary>
+        private const int MessageNotImplementedErrorCode = unchecked((int)0x80040265);
+
+        #endregion Bulk Operation Support Cache
+
         #region Private Methods
 
         private static bool EntityAttributesEqual(IExecutionContainer container, List<string> matchattributes, Entity entity1, Entity entity2)
@@ -722,7 +743,7 @@
 
         #region Batch Helpers
 
-        private const int DefaultBatchSize = 200;
+        private const int DefaultBatchSize = 100;
 
         private struct PendingCreate
         {
@@ -739,35 +760,255 @@
             public string Identifier;
         }
 
+        /// <summary>
+        /// Checks if CreateMultiple message is supported for the specified entity.
+        /// Results are cached per entity logical name for the lifetime of the import run.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="entityLogicalName">The logical name of the entity to check.</param>
+        /// <returns>True if CreateMultiple is supported; otherwise, false.</returns>
+        private bool IsCreateMultipleSupported(IExecutionContainer container, string entityLogicalName)
+        {
+            return IsBulkMessageSupported(container, entityLogicalName, "CreateMultiple", createMultipleSupportCache);
+        }
+
+        /// <summary>
+        /// Checks if UpdateMultiple message is supported for the specified entity.
+        /// Results are cached per entity logical name for the lifetime of the import run.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="entityLogicalName">The logical name of the entity to check.</param>
+        /// <returns>True if UpdateMultiple is supported; otherwise, false.</returns>
+        private bool IsUpdateMultipleSupported(IExecutionContainer container, string entityLogicalName)
+        {
+            return IsBulkMessageSupported(container, entityLogicalName, "UpdateMultiple", updateMultipleSupportCache);
+        }
+
+        /// <summary>
+        /// Checks if a specific SDK message is supported for an entity by querying sdkmessagefilter.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="entityLogicalName">The logical name of the entity to check.</param>
+        /// <param name="messageName">The name of the SDK message (e.g., "CreateMultiple", "UpdateMultiple").</param>
+        /// <param name="cache">The cache dictionary to use for storing results.</param>
+        /// <returns>True if the message is supported; otherwise, false.</returns>
+        private bool IsBulkMessageSupported(IExecutionContainer container, string entityLogicalName, string messageName, Dictionary<string, bool> cache)
+        {
+            if (cache.TryGetValue(entityLogicalName, out var isSupported))
+            {
+                return isSupported;
+            }
+
+            try
+            {
+                var query = new QueryExpression("sdkmessagefilter")
+                {
+                    ColumnSet = new ColumnSet("sdkmessagefilterid"),
+                    TopCount = 1,
+                    Criteria = new FilterExpression
+                    {
+                        FilterOperator = LogicalOperator.And,
+                        Conditions =
+                        {
+                            new ConditionExpression("primaryobjecttypecode", Microsoft.Xrm.Sdk.Query.ConditionOperator.Equal, entityLogicalName)
+                        }
+                    },
+                    LinkEntities =
+                    {
+                        new LinkEntity
+                        {
+                            LinkFromEntityName = "sdkmessagefilter",
+                            LinkToEntityName = "sdkmessage",
+                            LinkFromAttributeName = "sdkmessageid",
+                            LinkToAttributeName = "sdkmessageid",
+                            LinkCriteria = new FilterExpression
+                            {
+                                Conditions =
+                                {
+                                    new ConditionExpression("name", Microsoft.Xrm.Sdk.Query.ConditionOperator.Equal, messageName)
+                                }
+                            }
+                        }
+                    }
+                };
+
+                var result = container.RetrieveMultiple(query);
+                isSupported = result.Entities.Count > 0;
+                cache[entityLogicalName] = isSupported;
+                container.Log($"{messageName} support for {entityLogicalName}: {isSupported}");
+                return isSupported;
+            }
+            catch (Exception ex)
+            {
+                container.Log($"Failed to check {messageName} support for {entityLogicalName}: {ex.Message}");
+                cache[entityLogicalName] = false;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Marks CreateMultiple as unsupported for the specified entity (used when runtime execution fails).
+        /// </summary>
+        private void MarkCreateMultipleUnsupported(string entityLogicalName)
+        {
+            createMultipleSupportCache[entityLogicalName] = false;
+        }
+
+        /// <summary>
+        /// Marks UpdateMultiple as unsupported for the specified entity (used when runtime execution fails).
+        /// </summary>
+        private void MarkUpdateMultipleUnsupported(string entityLogicalName)
+        {
+            updateMultipleSupportCache[entityLogicalName] = false;
+        }
+
+        /// <summary>
+        /// Checks if an exception indicates that the bulk message is not implemented (on-premises scenario).
+        /// </summary>
+        private static bool IsBulkMessageNotImplemented(Exception ex)
+        {
+            if (ex is FaultException<OrganizationServiceFault> fault)
+            {
+                return fault.Detail?.ErrorCode == MessageNotImplementedErrorCode;
+            }
+            if (ex is NotSupportedException)
+            {
+                return true;
+            }
+            if (ex.InnerException != null)
+            {
+                return IsBulkMessageNotImplemented(ex.InnerException);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Flushes pending create operations using CreateMultiple when supported, falling back to ExecuteMultiple or individual calls.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="batch">The batch of pending create operations.</param>
+        /// <param name="created">Counter for successfully created records.</param>
+        /// <param name="failed">Counter for failed records.</param>
+        /// <param name="references">Collection to store created entity references.</param>
         private void FlushPendingCreates(IExecutionContainer container, List<PendingCreate> batch, ref int created, ref int failed, EntityReferenceCollection references)
         {
             if (batch.Count == 0)
             {
                 return;
             }
+
             if (batch.Count == 1)
             {
-                var item = batch[0];
-                try
+                FlushSingleCreate(container, batch[0], ref created, ref failed, references);
+                batch.Clear();
+                return;
+            }
+
+            var entityLogicalName = batch[0].Entity.LogicalName;
+
+            if (IsCreateMultipleSupported(container, entityLogicalName))
+            {
+                if (TryFlushCreatesWithCreateMultiple(container, batch, ref created, ref failed, references))
                 {
-                    container.Create(item.Entity);
+                    batch.Clear();
+                    return;
+                }
+            }
+
+            FlushCreatesWithExecuteMultiple(container, batch, ref created, ref failed, references);
+            batch.Clear();
+        }
+
+        /// <summary>
+        /// Creates a single record.
+        /// </summary>
+        private void FlushSingleCreate(IExecutionContainer container, PendingCreate item, ref int created, ref int failed, EntityReferenceCollection references)
+        {
+            try
+            {
+                container.Create(item.Entity);
+                created++;
+                SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                references.Add(item.Entity.ToEntityReference());
+                MapGuid(item.OldId, item.Entity.Id);
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
+                if (stoponerror)
+                {
+                    throw;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Attempts to flush creates using CreateMultipleRequest (Dataverse bulk API).
+        /// Returns true if successful; false if the message is not supported and fallback is needed.
+        /// </summary>
+        private bool TryFlushCreatesWithCreateMultiple(IExecutionContainer container, List<PendingCreate> batch, ref int created, ref int failed, EntityReferenceCollection references)
+        {
+            var entityLogicalName = batch[0].Entity.LogicalName;
+            var targets = new EntityCollection { EntityName = entityLogicalName };
+            foreach (var item in batch)
+            {
+                targets.Entities.Add(item.Entity);
+            }
+
+            var request = new OrganizationRequest("CreateMultiple")
+            {
+                Parameters = { ["Targets"] = targets }
+            };
+
+            container.Log($"Executing CreateMultiple for {batch.Count} {entityLogicalName} records");
+
+            try
+            {
+                var response = container.Service.Execute(request);
+                var createdIds = response.Results.Contains("Ids") ? (Guid[])response.Results["Ids"] : null;
+
+                for (var i = 0; i < batch.Count; i++)
+                {
+                    var item = batch[i];
+                    if (createdIds != null && i < createdIds.Length)
+                    {
+                        item.Entity.Id = createdIds[i];
+                    }
                     created++;
                     SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
                     references.Add(item.Entity.ToEntityReference());
                     MapGuid(item.OldId, item.Entity.Id);
                 }
-                catch (Exception ex)
-                {
-                    failed++;
-                    SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
-                    if (stoponerror)
-                    {
-                        throw;
-                    }
-                }
-                batch.Clear();
-                return;
+                return true;
             }
+            catch (Exception ex)
+            {
+                container.Log($"CreateMultiple failed: {ex.Message}");
+
+                if (IsBulkMessageNotImplemented(ex))
+                {
+                    container.Log("CreateMultiple not implemented, marking as unsupported and falling back");
+                    MarkCreateMultipleUnsupported(entityLogicalName);
+                    return false;
+                }
+
+                container.Log("CreateMultiple batch failed, falling back to individual creates");
+                if (stoponerror)
+                {
+                    throw;
+                }
+
+                FlushCreatesIndividually(container, batch, ref created, ref failed, references);
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Flushes creates using ExecuteMultipleRequest (legacy batch approach).
+        /// </summary>
+        private void FlushCreatesWithExecuteMultiple(IExecutionContainer container, List<PendingCreate> batch, ref int created, ref int failed, EntityReferenceCollection references)
+        {
             var multiRequest = new ExecuteMultipleRequest
             {
                 Requests = new OrganizationRequestCollection(),
@@ -777,18 +1018,23 @@
                     ReturnResponses = true
                 }
             };
+
             foreach (var item in batch)
             {
                 multiRequest.Requests.Add(new CreateRequest { Target = item.Entity });
             }
-            container.Log($"Executing batch create of {batch.Count} records");
+
+            container.Log($"Executing ExecuteMultiple batch create of {batch.Count} records");
+
             try
             {
                 var multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
+
                 for (var i = 0; i < batch.Count; i++)
                 {
                     var item = batch[i];
                     var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+
                     if (responseItem?.Fault != null)
                     {
                         failed++;
@@ -809,60 +1055,158 @@
             }
             catch (Exception ex)
             {
-                container.Log($"Batch create failed: {ex.Message}");
+                container.Log($"ExecuteMultiple batch create failed: {ex.Message}");
                 container.Log("Falling back to sequential creates");
-                foreach (var item in batch)
+                FlushCreatesIndividually(container, batch, ref created, ref failed, references);
+            }
+        }
+
+        /// <summary>
+        /// Flushes creates individually (used as fallback when batch operations fail).
+        /// </summary>
+        private void FlushCreatesIndividually(IExecutionContainer container, List<PendingCreate> batch, ref int created, ref int failed, EntityReferenceCollection references)
+        {
+            foreach (var item in batch)
+            {
+                try
                 {
-                    try
+                    container.Create(item.Entity);
+                    created++;
+                    SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                    references.Add(item.Entity.ToEntityReference());
+                    MapGuid(item.OldId, item.Entity.Id);
+                }
+                catch (Exception itemEx)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, itemEx.Message);
+                    if (stoponerror)
                     {
-                        container.Create(item.Entity);
-                        created++;
-                        SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
-                        references.Add(item.Entity.ToEntityReference());
-                        MapGuid(item.OldId, item.Entity.Id);
-                    }
-                    catch (Exception itemEx)
-                    {
-                        failed++;
-                        SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, itemEx.Message);
-                        if (stoponerror)
-                        {
-                            throw;
-                        }
+                        throw;
                     }
                 }
             }
-            batch.Clear();
         }
 
+        /// <summary>
+        /// Flushes pending update operations using UpdateMultiple when supported, falling back to ExecuteMultiple or individual calls.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="batch">The batch of pending update operations.</param>
+        /// <param name="updated">Counter for successfully updated records.</param>
+        /// <param name="failed">Counter for failed records.</param>
+        /// <param name="references">Collection to store updated entity references.</param>
         private void FlushPendingUpdates(IExecutionContainer container, List<PendingUpdate> batch, ref int updated, ref int failed, EntityReferenceCollection references)
         {
             if (batch.Count == 0)
             {
                 return;
             }
+
             if (batch.Count == 1)
             {
-                var item = batch[0];
-                try
+                FlushSingleUpdate(container, batch[0], ref updated, ref failed, references);
+                batch.Clear();
+                return;
+            }
+
+            var entityLogicalName = batch[0].Entity.LogicalName;
+
+            if (IsUpdateMultipleSupported(container, entityLogicalName))
+            {
+                if (TryFlushUpdatesWithUpdateMultiple(container, batch, ref updated, ref failed, references))
                 {
-                    container.Update(item.Entity);
+                    batch.Clear();
+                    return;
+                }
+            }
+
+            FlushUpdatesWithExecuteMultiple(container, batch, ref updated, ref failed, references);
+            batch.Clear();
+        }
+
+        /// <summary>
+        /// Updates a single record.
+        /// </summary>
+        private void FlushSingleUpdate(IExecutionContainer container, PendingUpdate item, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            try
+            {
+                container.Update(item.Entity);
+                updated++;
+                SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                references.Add(item.Entity.ToEntityReference());
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, ex.Message);
+                if (stoponerror)
+                {
+                    throw;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Attempts to flush updates using UpdateMultipleRequest (Dataverse bulk API).
+        /// Returns true if successful; false if the message is not supported and fallback is needed.
+        /// </summary>
+        private bool TryFlushUpdatesWithUpdateMultiple(IExecutionContainer container, List<PendingUpdate> batch, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            var entityLogicalName = batch[0].Entity.LogicalName;
+            var targets = new EntityCollection { EntityName = entityLogicalName };
+            foreach (var item in batch)
+            {
+                targets.Entities.Add(item.Entity);
+            }
+
+            var request = new OrganizationRequest("UpdateMultiple")
+            {
+                Parameters = { ["Targets"] = targets }
+            };
+
+            container.Log($"Executing UpdateMultiple for {batch.Count} {entityLogicalName} records");
+
+            try
+            {
+                container.Service.Execute(request);
+
+                foreach (var item in batch)
+                {
                     updated++;
                     SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
                     references.Add(item.Entity.ToEntityReference());
                 }
-                catch (Exception ex)
-                {
-                    failed++;
-                    SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, ex.Message);
-                    if (stoponerror)
-                    {
-                        throw;
-                    }
-                }
-                batch.Clear();
-                return;
+                return true;
             }
+            catch (Exception ex)
+            {
+                container.Log($"UpdateMultiple failed: {ex.Message}");
+
+                if (IsBulkMessageNotImplemented(ex))
+                {
+                    container.Log("UpdateMultiple not implemented, marking as unsupported and falling back");
+                    MarkUpdateMultipleUnsupported(entityLogicalName);
+                    return false;
+                }
+
+                container.Log("UpdateMultiple batch failed, falling back to individual updates");
+                if (stoponerror)
+                {
+                    throw;
+                }
+
+                FlushUpdatesIndividually(container, batch, ref updated, ref failed, references);
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Flushes updates using ExecuteMultipleRequest (legacy batch approach).
+        /// </summary>
+        private void FlushUpdatesWithExecuteMultiple(IExecutionContainer container, List<PendingUpdate> batch, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
             var multiRequest = new ExecuteMultipleRequest
             {
                 Requests = new OrganizationRequestCollection(),
@@ -872,18 +1216,23 @@
                     ReturnResponses = true
                 }
             };
+
             foreach (var item in batch)
             {
                 multiRequest.Requests.Add(new UpdateRequest { Target = item.Entity });
             }
-            container.Log($"Executing batch update of {batch.Count} records");
+
+            container.Log($"Executing ExecuteMultiple batch update of {batch.Count} records");
+
             try
             {
                 var multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
+
                 for (var i = 0; i < batch.Count; i++)
                 {
                     var item = batch[i];
                     var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+
                     if (responseItem?.Fault != null)
                     {
                         failed++;
@@ -899,29 +1248,36 @@
             }
             catch (Exception ex)
             {
-                container.Log($"Batch update failed: {ex.Message}");
+                container.Log($"ExecuteMultiple batch update failed: {ex.Message}");
                 container.Log("Falling back to sequential updates");
-                foreach (var item in batch)
+                FlushUpdatesIndividually(container, batch, ref updated, ref failed, references);
+            }
+        }
+
+        /// <summary>
+        /// Flushes updates individually (used as fallback when batch operations fail).
+        /// </summary>
+        private void FlushUpdatesIndividually(IExecutionContainer container, List<PendingUpdate> batch, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            foreach (var item in batch)
+            {
+                try
                 {
-                    try
+                    container.Update(item.Entity);
+                    updated++;
+                    SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                    references.Add(item.Entity.ToEntityReference());
+                }
+                catch (Exception itemEx)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, itemEx.Message);
+                    if (stoponerror)
                     {
-                        container.Update(item.Entity);
-                        updated++;
-                        SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
-                        references.Add(item.Entity.ToEntityReference());
-                    }
-                    catch (Exception itemEx)
-                    {
-                        failed++;
-                        SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, itemEx.Message);
-                        if (stoponerror)
-                        {
-                            throw;
-                        }
+                        throw;
                     }
                 }
             }
-            batch.Clear();
         }
 
         private void FlushPendingDeletes(IExecutionContainer container, List<Entity> batch, ref int deleted, ref int failed)

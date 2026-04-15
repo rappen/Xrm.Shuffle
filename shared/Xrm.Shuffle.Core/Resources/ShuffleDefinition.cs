@@ -92,9 +92,9 @@ namespace Cinteros.Crm.Utils.Shuffle.Types {
         [System.Xml.Serialization.XmlIgnoreAttribute()]
         public bool OverwriteSpecified;
 
-        /// <summary>Number of records per ExecuteMultipleRequest batch. Set to 1 to disable batching. Max 1000.</summary>
+        /// <summary>Number of records per CreateMultiple/UpdateMultiple batch. Set to 1 to disable batching. Max 1000. Microsoft recommends ~100 for standard tables.</summary>
         [System.Xml.Serialization.XmlAttributeAttribute()]
-        [System.ComponentModel.DefaultValueAttribute(200)]
+        [System.ComponentModel.DefaultValueAttribute(100)]
         public int BatchSize;
 
         public DataBlockImport() {
@@ -103,7 +103,7 @@ namespace Cinteros.Crm.Utils.Shuffle.Types {
             this.Delete = DeleteTypes.None;
             this.UpdateInactive = false;
             this.UpdateIdentical = false;
-            this.BatchSize = 200;
+            this.BatchSize = 100;
         }
     }
     
