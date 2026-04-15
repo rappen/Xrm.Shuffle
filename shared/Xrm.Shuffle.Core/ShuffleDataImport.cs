@@ -32,6 +32,18 @@
         private Dictionary<string, bool> updateMultipleSupportCache = new Dictionary<string, bool>();
 
         /// <summary>
+        /// Cache for UpsertMultiple support per entity logical name.
+        /// True = supported, False = not supported, null = not yet checked.
+        /// </summary>
+        private Dictionary<string, bool> upsertMultipleSupportCache = new Dictionary<string, bool>();
+
+        /// <summary>
+        /// Cache for Upsert (single) support per entity logical name.
+        /// True = supported, False = not supported, null = not yet checked.
+        /// </summary>
+        private Dictionary<string, bool> upsertSupportCache = new Dictionary<string, bool>();
+
+        /// <summary>
         /// Fault code indicating the message is not implemented (used for on-premises fallback detection).
         /// </summary>
         private const int MessageNotImplementedErrorCode = unchecked((int)0x80040265);
@@ -315,6 +327,22 @@
                     SendLine(container, "DeferStateAndOwner enabled - state/owner will be applied in second pass");
                 }
 
+                // Determine if we can use Upsert path (eliminates need for PreRetrieveAll queries)
+                // Upsert is optimal when: Save=CreateUpdate, records have ID (CreateWithId), and records are batchable
+                var canUseUpsert = save == SaveTypes.CreateUpdate && 
+                                   includeid && 
+                                   matchattributes.Count > 0 &&
+                                   delete == DeleteTypes.None;
+
+                if (canUseUpsert)
+                {
+                    SendLine(container, "Upsert path enabled - records will be upserted without pre-retrieval queries");
+                    if (preretrieveall)
+                    {
+                        SendLine(container, "Note: PreRetrieveAll is not needed when using Upsert and will be skipped");
+                    }
+                }
+
                 SendLine(container);
                 SendLine(container, $"Importing block {name} - {cEntities.Count()} records ");
 
@@ -346,6 +374,7 @@
                 EntityCollection cAllRecordsToMatch = null;
                 var pendingCreates = new List<PendingCreate>();
                 var pendingUpdates = new List<PendingUpdate>();
+                var pendingUpserts = new List<PendingUpsert>();
                 var deferredStates = new List<DeferredStateChange>();
                 var deferredOwners = new List<DeferredOwnerChange>();
                 foreach (var cdEntity in cEntities.Entities)
@@ -405,8 +434,35 @@
                                     }
                                 }
                             }
+                            else if (canUseUpsert && IsBatchable(cdEntity))
+                            {
+                                // Upsert path: skip match queries entirely, let Dataverse decide create vs update
+                                pendingUpserts.Add(new PendingUpsert { Entity = cdEntity, OldId = oldid, Position = i, Identifier = unique });
+                                if (pendingUpserts.Count >= batchsize)
+                                {
+                                    FlushPendingUpserts(container, pendingUpserts, ref created, ref updated, ref failed, references);
+                                }
+                                newid = cdEntity.Id;
+                            }
+                            else if (canUseUpsert && !IsBatchable(cdEntity))
+                            {
+                                // Non-batchable record in Upsert mode: flush batches and use SaveEntity
+                                FlushPendingUpserts(container, pendingUpserts, ref created, ref updated, ref failed, references);
+                                FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+                                if (SaveEntity(container, cdEntity, null, updateinactive, updateidentical, i, unique))
+                                {
+                                    // SaveEntity handles create vs update detection internally when match is null
+                                    // Since we're in upsert mode with includeid=true, the record has an ID
+                                    // We count this as "updated" since we don't know if it was created or updated
+                                    updated++;
+                                    newid = cdEntity.Id;
+                                    references.Add(cdEntity.ToEntityReference());
+                                }
+                            }
                             else
                             {
+                                // Original match-based path
                                 // Flush batches before matching to ensure guidmap is up to date
                                 if (pendingCreates.Count > 0)
                                 {
@@ -546,6 +602,7 @@
                         {
                             #region Intersect
 
+                            FlushPendingUpserts(container, pendingUpserts, ref created, ref updated, ref failed, references);
                             FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
                             FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
 
@@ -598,6 +655,7 @@
                     }
                     i++;
                 }
+                FlushPendingUpserts(container, pendingUpserts, ref created, ref updated, ref failed, references);
                 FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
                 FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
 
@@ -784,6 +842,14 @@
             public string Identifier;
         }
 
+        private struct PendingUpsert
+        {
+            public Entity Entity;
+            public Guid OldId;
+            public int Position;
+            public string Identifier;
+        }
+
         private struct DeferredStateChange
         {
             public string EntityLogicalName;
@@ -827,6 +893,30 @@
         private bool IsUpdateMultipleSupported(IExecutionContainer container, string entityLogicalName)
         {
             return IsBulkMessageSupported(container, entityLogicalName, "UpdateMultiple", updateMultipleSupportCache);
+        }
+
+        /// <summary>
+        /// Checks if UpsertMultiple message is supported for the specified entity.
+        /// Results are cached per entity logical name for the lifetime of the import run.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="entityLogicalName">The logical name of the entity to check.</param>
+        /// <returns>True if UpsertMultiple is supported; otherwise, false.</returns>
+        private bool IsUpsertMultipleSupported(IExecutionContainer container, string entityLogicalName)
+        {
+            return IsBulkMessageSupported(container, entityLogicalName, "UpsertMultiple", upsertMultipleSupportCache);
+        }
+
+        /// <summary>
+        /// Checks if Upsert (single) message is supported for the specified entity.
+        /// Results are cached per entity logical name for the lifetime of the import run.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="entityLogicalName">The logical name of the entity to check.</param>
+        /// <returns>True if Upsert is supported; otherwise, false.</returns>
+        private bool IsUpsertSupported(IExecutionContainer container, string entityLogicalName)
+        {
+            return IsBulkMessageSupported(container, entityLogicalName, "Upsert", upsertSupportCache);
         }
 
         /// <summary>
@@ -905,6 +995,22 @@
         private void MarkUpdateMultipleUnsupported(string entityLogicalName)
         {
             updateMultipleSupportCache[entityLogicalName] = false;
+        }
+
+        /// <summary>
+        /// Marks UpsertMultiple as unsupported for the specified entity (used when runtime execution fails).
+        /// </summary>
+        private void MarkUpsertMultipleUnsupported(string entityLogicalName)
+        {
+            upsertMultipleSupportCache[entityLogicalName] = false;
+        }
+
+        /// <summary>
+        /// Marks Upsert (single) as unsupported for the specified entity (used when runtime execution fails).
+        /// </summary>
+        private void MarkUpsertUnsupported(string entityLogicalName)
+        {
+            upsertSupportCache[entityLogicalName] = false;
         }
 
         /// <summary>
@@ -1584,6 +1690,371 @@
                 }
             }
         }
+
+        #region Upsert Operations
+
+        /// <summary>
+        /// Flushes pending upsert operations using UpsertMultiple when supported, falling back to ExecuteMultiple with Upsert, 
+        /// then individual Upsert, then individual Create/Update.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="batch">The batch of pending upsert operations.</param>
+        /// <param name="created">Counter for successfully created records.</param>
+        /// <param name="updated">Counter for successfully updated records.</param>
+        /// <param name="failed">Counter for failed records.</param>
+        /// <param name="references">Collection to store entity references.</param>
+        private void FlushPendingUpserts(IExecutionContainer container, List<PendingUpsert> batch, ref int created, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            if (batch.Count == 0)
+            {
+                return;
+            }
+
+            if (batch.Count == 1)
+            {
+                FlushSingleUpsert(container, batch[0], ref created, ref updated, ref failed, references);
+                batch.Clear();
+                return;
+            }
+
+            var entityLogicalName = batch[0].Entity.LogicalName;
+
+            if (IsUpsertMultipleSupported(container, entityLogicalName))
+            {
+                if (TryFlushUpsertsWithUpsertMultiple(container, batch, ref created, ref updated, ref failed, references))
+                {
+                    batch.Clear();
+                    return;
+                }
+            }
+
+            if (IsUpsertSupported(container, entityLogicalName))
+            {
+                if (TryFlushUpsertsWithExecuteMultiple(container, batch, ref created, ref updated, ref failed, references))
+                {
+                    batch.Clear();
+                    return;
+                }
+            }
+
+            // Final fallback: individual Create/Update operations
+            FlushUpsertsAsCreateUpdate(container, batch, ref created, ref updated, ref failed, references);
+            batch.Clear();
+        }
+
+        /// <summary>
+        /// Upserts a single record.
+        /// </summary>
+        private void FlushSingleUpsert(IExecutionContainer container, PendingUpsert item, ref int created, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            var entityLogicalName = item.Entity.LogicalName;
+
+            if (IsUpsertSupported(container, entityLogicalName))
+            {
+                try
+                {
+                    var request = new UpsertRequest { Target = item.Entity };
+                    var response = (UpsertResponse)container.Service.Execute(request);
+
+                    if (response.RecordCreated)
+                    {
+                        if (response.Target != null)
+                        {
+                            item.Entity.Id = response.Target.Id;
+                        }
+                        created++;
+                        SendLine(container, "{0:000} Created (upsert): {1}", item.Position, item.Identifier);
+                    }
+                    else
+                    {
+                        updated++;
+                        SendLine(container, "{0:000} Updated (upsert): {1}", item.Position, item.Identifier);
+                    }
+                    references.Add(item.Entity.ToEntityReference());
+                    MapGuid(item.OldId, item.Entity.Id);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    if (IsBulkMessageNotImplemented(ex))
+                    {
+                        container.Log($"Upsert not implemented for {entityLogicalName}, falling back to Create/Update");
+                        MarkUpsertUnsupported(entityLogicalName);
+                    }
+                    else
+                    {
+                        failed++;
+                        SendLine(container, "{0:000} Upsert Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
+                        if (stoponerror)
+                        {
+                            throw;
+                        }
+                        return;
+                    }
+                }
+            }
+
+            // Fallback to Create (since we don't have a match for single upsert fallback)
+            try
+            {
+                container.Create(item.Entity);
+                created++;
+                SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                references.Add(item.Entity.ToEntityReference());
+                MapGuid(item.OldId, item.Entity.Id);
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
+                if (stoponerror)
+                {
+                    throw;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Attempts to flush upserts using UpsertMultipleRequest (Dataverse bulk API).
+        /// Returns true if successful; false if the message is not supported and fallback is needed.
+        /// </summary>
+        private bool TryFlushUpsertsWithUpsertMultiple(IExecutionContainer container, List<PendingUpsert> batch, ref int created, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            var entityLogicalName = batch[0].Entity.LogicalName;
+            var targets = new EntityCollection { EntityName = entityLogicalName };
+            foreach (var item in batch)
+            {
+                targets.Entities.Add(item.Entity);
+            }
+
+            var request = new OrganizationRequest("UpsertMultiple")
+            {
+                Parameters = { ["Targets"] = targets }
+            };
+
+            container.Log($"Executing UpsertMultiple for {batch.Count} {entityLogicalName} records");
+
+            try
+            {
+                var response = container.Service.Execute(request);
+                var results = response.Results.Contains("Results") ? (UpsertResponse[])response.Results["Results"] : null;
+
+                for (var i = 0; i < batch.Count; i++)
+                {
+                    var item = batch[i];
+                    var upsertResult = results != null && i < results.Length ? results[i] : null;
+
+                    if (upsertResult != null)
+                    {
+                        if (upsertResult.RecordCreated)
+                        {
+                            if (upsertResult.Target != null)
+                            {
+                                item.Entity.Id = upsertResult.Target.Id;
+                            }
+                            created++;
+                            SendLine(container, "{0:000} Created (upsert): {1}", item.Position, item.Identifier);
+                        }
+                        else
+                        {
+                            updated++;
+                            SendLine(container, "{0:000} Updated (upsert): {1}", item.Position, item.Identifier);
+                        }
+                    }
+                    else
+                    {
+                        // If no result available, count as updated (default upsert behavior)
+                        updated++;
+                        SendLine(container, "{0:000} Upserted: {1}", item.Position, item.Identifier);
+                    }
+                    references.Add(item.Entity.ToEntityReference());
+                    MapGuid(item.OldId, item.Entity.Id);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                container.Log($"UpsertMultiple failed: {ex.Message}");
+
+                if (IsBulkMessageNotImplemented(ex))
+                {
+                    container.Log("UpsertMultiple not implemented, marking as unsupported and falling back");
+                    MarkUpsertMultipleUnsupported(entityLogicalName);
+                    return false;
+                }
+
+                container.Log("UpsertMultiple batch failed, falling back to ExecuteMultiple with Upsert");
+                if (stoponerror)
+                {
+                    throw;
+                }
+
+                // Try ExecuteMultiple with individual Upsert requests
+                return TryFlushUpsertsWithExecuteMultiple(container, batch, ref created, ref updated, ref failed, references);
+            }
+        }
+
+        /// <summary>
+        /// Flushes upserts using ExecuteMultipleRequest with individual UpsertRequest items.
+        /// Returns true if successful; false if Upsert is not supported and fallback is needed.
+        /// </summary>
+        private bool TryFlushUpsertsWithExecuteMultiple(IExecutionContainer container, List<PendingUpsert> batch, ref int created, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            var entityLogicalName = batch[0].Entity.LogicalName;
+            var multiRequest = new ExecuteMultipleRequest
+            {
+                Requests = new OrganizationRequestCollection(),
+                Settings = new ExecuteMultipleSettings
+                {
+                    ContinueOnError = !stoponerror,
+                    ReturnResponses = true
+                }
+            };
+
+            foreach (var item in batch)
+            {
+                multiRequest.Requests.Add(new UpsertRequest { Target = item.Entity });
+            }
+
+            container.Log($"Executing ExecuteMultiple with UpsertRequest for {batch.Count} {entityLogicalName} records");
+
+            try
+            {
+                var multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
+
+                var upsertNotImplemented = false;
+                for (var i = 0; i < batch.Count; i++)
+                {
+                    var item = batch[i];
+                    var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+
+                    if (responseItem?.Fault != null)
+                    {
+                        // Check if fault indicates Upsert not implemented
+                        if (responseItem.Fault.ErrorCode == MessageNotImplementedErrorCode)
+                        {
+                            upsertNotImplemented = true;
+                            break;
+                        }
+                        failed++;
+                        SendLine(container, "{0:000} Upsert Failed: {1} {2}", item.Position, item.Identifier, responseItem.Fault.Message);
+                    }
+                    else if (responseItem?.Response is UpsertResponse upsertResponse)
+                    {
+                        if (upsertResponse.RecordCreated)
+                        {
+                            if (upsertResponse.Target != null)
+                            {
+                                item.Entity.Id = upsertResponse.Target.Id;
+                            }
+                            created++;
+                            SendLine(container, "{0:000} Created (upsert): {1}", item.Position, item.Identifier);
+                        }
+                        else
+                        {
+                            updated++;
+                            SendLine(container, "{0:000} Updated (upsert): {1}", item.Position, item.Identifier);
+                        }
+                        references.Add(item.Entity.ToEntityReference());
+                        MapGuid(item.OldId, item.Entity.Id);
+                    }
+                }
+
+                if (upsertNotImplemented)
+                {
+                    container.Log("Upsert not implemented, marking as unsupported and falling back to Create/Update");
+                    MarkUpsertUnsupported(entityLogicalName);
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                container.Log($"ExecuteMultiple with Upsert failed: {ex.Message}");
+
+                if (IsBulkMessageNotImplemented(ex))
+                {
+                    container.Log("Upsert not implemented, marking as unsupported and falling back");
+                    MarkUpsertUnsupported(entityLogicalName);
+                    return false;
+                }
+
+                container.Log("Falling back to individual Create/Update operations");
+                FlushUpsertsAsCreateUpdate(container, batch, ref created, ref updated, ref failed, references);
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Flushes upserts using individual Create/Update operations (final fallback for CRM 8.x and older).
+        /// Since we don't have match results, we attempt Create first and fall back to Update on duplicate key error.
+        /// </summary>
+        private void FlushUpsertsAsCreateUpdate(IExecutionContainer container, List<PendingUpsert> batch, ref int created, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            container.Log($"Falling back to Create/Update for {batch.Count} records (Upsert not available)");
+
+            foreach (var item in batch)
+            {
+                try
+                {
+                    // Attempt Create first
+                    container.Create(item.Entity);
+                    created++;
+                    SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                    references.Add(item.Entity.ToEntityReference());
+                    MapGuid(item.OldId, item.Entity.Id);
+                }
+                catch (FaultException<OrganizationServiceFault> createEx)
+                {
+                    // Check for duplicate key error (record exists)
+                    if (createEx.Detail?.ErrorCode == -2147220937 || // DuplicateRecordEntityKey
+                        createEx.Detail?.ErrorCode == -2147220685 || // DuplicateRecord
+                        createEx.Message.Contains("duplicate") ||
+                        createEx.Message.Contains("already exists"))
+                    {
+                        // Record exists, try Update instead
+                        try
+                        {
+                            container.Update(item.Entity);
+                            updated++;
+                            SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                            references.Add(item.Entity.ToEntityReference());
+                            MapGuid(item.OldId, item.Entity.Id);
+                        }
+                        catch (Exception updateEx)
+                        {
+                            failed++;
+                            SendLine(container, "{0:000} Update Failed (fallback): {1} {2}", item.Position, item.Identifier, updateEx.Message);
+                            if (stoponerror)
+                            {
+                                throw;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        failed++;
+                        SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, createEx.Message);
+                        if (stoponerror)
+                        {
+                            throw;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
+                    if (stoponerror)
+                    {
+                        throw;
+                    }
+                }
+            }
+        }
+
+        #endregion Upsert Operations
 
         private void FlushPendingDeletes(IExecutionContainer container, List<Entity> batch, ref int deleted, ref int failed)
         {

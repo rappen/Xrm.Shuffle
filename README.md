@@ -151,7 +151,9 @@ Choose one of two query modes:
 | `DeferStateAndOwner` | boolean | `false` | Strip `statecode`, `statuscode`, and `ownerid` from records during import and apply them in a second pass using bulk operations. **Significantly improves performance** when importing data that includes state/owner attributes. |
 | `Overwrite` | boolean | — | ⚠️ **Deprecated** — use `Save` instead |
 
-> **Performance tip:** Shuffle automatically uses **CreateMultiple/UpdateMultiple** bulk operations on Dataverse (online) for maximum throughput, falling back to **ExecuteMultipleRequest** for on-premises CRM 9.1 compatibility. `BatchSize` controls how many records are grouped per API call. The default of 100 aligns with Microsoft's recommendation for standard tables. Larger values (up to 1000) may improve throughput for simple operations. For records with complex plug-ins, reduce the value or set to `1` to disable batching entirely.
+> **Performance tip:** Shuffle automatically uses **CreateMultiple/UpdateMultiple/UpsertMultiple** bulk operations on Dataverse (online) for maximum throughput, falling back to **ExecuteMultipleRequest** for on-premises CRM 9.1 compatibility, and further falling back to individual operations for CRM 8.x and older. `BatchSize` controls how many records are grouped per API call. The default of 100 aligns with Microsoft's recommendation for standard tables. Larger values (up to 1000) may improve throughput for simple operations. For records with complex plug-ins, reduce the value or set to `1` to disable batching entirely.
+
+> **UpsertMultiple optimization:** When importing with `Save="CreateUpdate"`, `CreateWithId="true"`, and match attributes defined, Shuffle automatically uses **UpsertMultiple** on Dataverse (eliminating the need for `PreRetrieveAll` queries). This can achieve **2-3× faster imports** by letting Dataverse decide whether to create or update each record. No configuration required — the system detects when Upsert is optimal and uses it automatically.
 
 > **DeferStateAndOwner optimization:** When `DeferStateAndOwner="true"`, records with `statecode`, `statuscode`, or `ownerid` attributes are still imported using bulk operations — these attributes are temporarily stripped, the records are batched, and then state/owner changes are applied in a second pass. This can achieve **3-5× performance improvement** on datasets where most records include state or owner information. Use this when migrating data between environments where preserving state/owner is important.
 
@@ -159,7 +161,7 @@ Choose one of two query modes:
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `PreRetrieveAll` | boolean | `false` | Fetch all existing target records up-front before import starts; improves performance for large imports on small-to-medium target datasets |
+| `PreRetrieveAll` | boolean | `false` | Fetch all existing target records up-front before import starts. **Note:** When UpsertMultiple is available (Dataverse + `CreateWithId="true"`), this flag is automatically bypassed since Upsert eliminates the need for pre-retrieval queries. On CRM 9.1 on-premises or older, this flag still provides significant performance benefits for large imports on small-to-medium target datasets. |
 
 Add one or more `<Attribute Name="..." Display="...">` children — these are the fields used to match incoming records against existing target records. `Display` is an optional alternate attribute used for the matched value in log output.
 
@@ -177,6 +179,41 @@ Associates records from another `<DataBlock>` — used for N:N relationships or 
 ---
 
 ## Recent Changes
+
+### UpsertMultiple bulk operation support
+Import operations with `Save="CreateUpdate"` and `CreateWithId="true"` now automatically use **UpsertMultiple** on Dataverse (online), which provides significant performance benefits:
+
+- **Eliminates PreRetrieveAll queries** — when Upsert is available, the system no longer needs to query existing records to determine create vs. update. Dataverse makes this decision automatically.
+- **Single batch for all records** — instead of separate batches for creates and updates, all records go through a unified Upsert batch.
+- **Same robust fallback chain** — automatically falls back through multiple tiers:
+  1. **UpsertMultiple** (Dataverse online only)
+  2. **ExecuteMultipleRequest with UpsertRequest** (CRM 9.1 on-premises)
+  3. **Individual UpsertRequest** (fallback)
+  4. **Individual Create/Update** (CRM 8.x and older)
+
+**When Upsert is used automatically:**
+- `Save="CreateUpdate"` (not CreateOnly or UpdateOnly)
+- `CreateWithId="true"` (records have their source GUID preserved)
+- `<Match>` attributes are defined
+- `Delete` is set to `None` (no deletion of existing records)
+
+**Example configuration:**
+```xml
+<DataBlock Name="Contacts" Entity="contact">
+  <Import Save="CreateUpdate" CreateWithId="true" BatchSize="100" DeferStateAndOwner="true">
+    <Match>
+      <Attribute Name="contactid" />
+    </Match>
+  </Import>
+</DataBlock>
+```
+
+**Performance impact:** For environment-to-environment migrations with `CreateWithId="true"`, imports can be **2-3× faster** because:
+1. No `PreRetrieveAll` query overhead
+2. No per-record match queries
+3. Single unified batch instead of separate create/update batches
+
+**Backwards compatibility:** Full support maintained for all CRM/Dataverse versions. The system automatically detects capabilities and selects the optimal API path.
 
 ### DeferStateAndOwner optimization for high-performance imports
 A new **`DeferStateAndOwner`** attribute on `<Import>` enables a two-pass import strategy that dramatically improves performance when importing records with `statecode`, `statuscode`, or `ownerid` attributes:
