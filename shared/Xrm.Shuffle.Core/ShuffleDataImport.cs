@@ -308,6 +308,12 @@
                 var updateattributes = !updateidentical ? GetUpdateAttributes(cEntities) : new List<string>();
                 var preretrieveall = block.Import.Match?.PreRetrieveAll == true;
                 var batchsize = Math.Max(1, Math.Min(block.Import.BatchSize, 1000));
+                var deferStateAndOwner = block.Import.DeferStateAndOwner;
+
+                if (deferStateAndOwner)
+                {
+                    SendLine(container, "DeferStateAndOwner enabled - state/owner will be applied in second pass");
+                }
 
                 SendLine(container);
                 SendLine(container, $"Importing block {name} - {cEntities.Count()} records ");
@@ -340,6 +346,8 @@
                 EntityCollection cAllRecordsToMatch = null;
                 var pendingCreates = new List<PendingCreate>();
                 var pendingUpdates = new List<PendingUpdate>();
+                var deferredStates = new List<DeferredStateChange>();
+                var deferredOwners = new List<DeferredOwnerChange>();
                 foreach (var cdEntity in cEntities.Entities)
                 {
                     var unique = cdEntity.Id.ToString();
@@ -353,6 +361,11 @@
                         ReplaceUpdateInfo(cdEntity);
                         unique = GetEntityDisplayString(container, block.Import.Match, cdEntity);
                         SendStatus(null, unique);
+
+                        if (deferStateAndOwner)
+                        {
+                            StripAndDeferStateOwner(cdEntity, deferredStates, deferredOwners, i, unique);
+                        }
 
                         if (!block.TypeSpecified || block.Type == EntityTypes.Entity)
                         {
@@ -522,6 +535,11 @@
                                 guidmap.Add(oldid, newid);
                             }
 
+                            if (deferStateAndOwner && !oldid.Equals(Guid.Empty) && !newid.Equals(Guid.Empty))
+                            {
+                                UpdateDeferredActualIds(deferredStates, deferredOwners, oldid, newid);
+                            }
+
                             #endregion Entity
                         }
                         else if (block.Type == EntityTypes.Intersect)
@@ -582,6 +600,12 @@
                 }
                 FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
                 FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+
+                if (deferStateAndOwner)
+                {
+                    FlushDeferredStateChanges(container, deferredStates, ref updated, ref failed);
+                    FlushDeferredOwnerChanges(container, deferredOwners, ref updated, ref failed);
+                }
 
                 SendLine(container, $"Created: {created} Updated: {updated} Skipped: {skipped} Deleted: {deleted} Failed: {failed}");
             }
@@ -760,6 +784,27 @@
             public string Identifier;
         }
 
+        private struct DeferredStateChange
+        {
+            public string EntityLogicalName;
+            public Guid OriginalId;      // Id from import file (for lookup)
+            public Guid ActualId;        // Id after create/update (for applying state)
+            public OptionSetValue StateCode;
+            public OptionSetValue StatusCode;
+            public int Position;
+            public string Identifier;
+        }
+
+        private struct DeferredOwnerChange
+        {
+            public string EntityLogicalName;
+            public Guid OriginalId;      // Id from import file (for lookup)
+            public Guid ActualId;        // Id after create/update (for assigning owner)
+            public EntityReference Owner;
+            public int Position;
+            public string Identifier;
+        }
+
         /// <summary>
         /// Checks if CreateMultiple message is supported for the specified entity.
         /// Results are cached per entity logical name for the lifetime of the import run.
@@ -880,6 +925,266 @@
                 return IsBulkMessageNotImplemented(ex.InnerException);
             }
             return false;
+        }
+
+        /// <summary>
+        /// Strips statecode, statuscode, and ownerid from an entity and defers them for later bulk application.
+        /// </summary>
+        /// <param name="entity">The entity to strip attributes from.</param>
+        /// <param name="deferredStates">Collection to store deferred state changes.</param>
+        /// <param name="deferredOwners">Collection to store deferred owner changes.</param>
+        /// <param name="position">Record position for logging.</param>
+        /// <param name="identifier">Record identifier for logging.</param>
+        private void StripAndDeferStateOwner(Entity entity, List<DeferredStateChange> deferredStates, List<DeferredOwnerChange> deferredOwners, int position, string identifier)
+        {
+            var originalId = entity.Id;
+
+            if (entity.Contains("statecode") && entity.Contains("statuscode"))
+            {
+                deferredStates.Add(new DeferredStateChange
+                {
+                    EntityLogicalName = entity.LogicalName,
+                    OriginalId = originalId,
+                    ActualId = Guid.Empty, // Will be updated after create/update
+                    StateCode = entity.GetAttributeValue<OptionSetValue>("statecode"),
+                    StatusCode = entity.GetAttributeValue<OptionSetValue>("statuscode"),
+                    Position = position,
+                    Identifier = identifier
+                });
+                entity.Attributes.Remove("statecode");
+                entity.Attributes.Remove("statuscode");
+            }
+
+            if (entity.Contains("ownerid"))
+            {
+                deferredOwners.Add(new DeferredOwnerChange
+                {
+                    EntityLogicalName = entity.LogicalName,
+                    OriginalId = originalId,
+                    ActualId = Guid.Empty, // Will be updated after create/update
+                    Owner = entity.GetAttributeValue<EntityReference>("ownerid"),
+                    Position = position,
+                    Identifier = identifier
+                });
+                entity.Attributes.Remove("ownerid");
+            }
+        }
+
+        /// <summary>
+        /// Updates the ActualId in deferred changes after a record is created or updated.
+        /// </summary>
+        /// <param name="deferredStates">Deferred state changes to update.</param>
+        /// <param name="deferredOwners">Deferred owner changes to update.</param>
+        /// <param name="originalId">The original Id from the import file.</param>
+        /// <param name="actualId">The actual Id after create/update.</param>
+        private void UpdateDeferredActualIds(List<DeferredStateChange> deferredStates, List<DeferredOwnerChange> deferredOwners, Guid originalId, Guid actualId)
+        {
+            for (int i = 0; i < deferredStates.Count; i++)
+            {
+                if (deferredStates[i].OriginalId == originalId)
+                {
+                    var item = deferredStates[i];
+                    item.ActualId = actualId;
+                    deferredStates[i] = item;
+                }
+            }
+
+            for (int i = 0; i < deferredOwners.Count; i++)
+            {
+                if (deferredOwners[i].OriginalId == originalId)
+                {
+                    var item = deferredOwners[i];
+                    item.ActualId = actualId;
+                    deferredOwners[i] = item;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies deferred state changes in bulk using UpdateMultiple when supported.
+        /// </summary>
+        private void FlushDeferredStateChanges(IExecutionContainer container, List<DeferredStateChange> changes, ref int updated, ref int failed)
+        {
+            if (changes.Count == 0)
+            {
+                return;
+            }
+
+            container.Log($"Applying {changes.Count} deferred state changes");
+
+            var byEntity = changes.GroupBy(c => c.EntityLogicalName);
+
+            foreach (var group in byEntity)
+            {
+                var entityName = group.Key;
+                var batch = group.ToList();
+
+                if (entityName == "duplicaterule" || entityName == "savedquery")
+                {
+                    ApplyStatesIndividually(container, batch, ref updated, ref failed);
+                    continue;
+                }
+
+                if (IsUpdateMultipleSupported(container, entityName))
+                {
+                    if (TryApplyStatesWithUpdateMultiple(container, entityName, batch, ref updated, ref failed))
+                    {
+                        continue;
+                    }
+                }
+
+                ApplyStatesIndividually(container, batch, ref updated, ref failed);
+            }
+        }
+
+        /// <summary>
+        /// Attempts to apply state changes using UpdateMultiple.
+        /// </summary>
+        private bool TryApplyStatesWithUpdateMultiple(IExecutionContainer container, string entityName, List<DeferredStateChange> batch, ref int updated, ref int failed)
+        {
+            var targets = new EntityCollection { EntityName = entityName };
+
+            foreach (var change in batch)
+            {
+                if (change.ActualId == Guid.Empty)
+                {
+                    container.Log($"WARNING: Skipping deferred state change for {change.Identifier} - ActualId not set");
+                    failed++;
+                    continue;
+                }
+
+                var entity = new Entity(entityName, change.ActualId);
+                entity["statecode"] = change.StateCode;
+                entity["statuscode"] = change.StatusCode;
+                targets.Entities.Add(entity);
+            }
+
+            if (targets.Entities.Count == 0)
+            {
+                return true;
+            }
+
+            try
+            {
+                var request = new OrganizationRequest("UpdateMultiple")
+                {
+                    Parameters = { ["Targets"] = targets }
+                };
+                container.Service.Execute(request);
+                updated += targets.Entities.Count;
+                container.Log($"Applied {targets.Entities.Count} state changes via UpdateMultiple for {entityName}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                container.Log($"UpdateMultiple for state changes failed: {ex.Message}");
+                if (stoponerror)
+                {
+                    throw;
+                }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Applies state changes individually using SetState.
+        /// </summary>
+        private void ApplyStatesIndividually(IExecutionContainer container, List<DeferredStateChange> batch, ref int updated, ref int failed)
+        {
+            foreach (var change in batch)
+            {
+                try
+                {
+                    if (change.ActualId == Guid.Empty)
+                    {
+                        failed++;
+                        SendLine(container, "{0:000} SetState Failed (deferred): {1} - ActualId not set", change.Position, change.Identifier);
+                        if (stoponerror)
+                        {
+                            throw new InvalidOperationException($"ActualId not set for deferred state change on {change.Identifier}");
+                        }
+                        continue;
+                    }
+
+                    var entity = new Entity(change.EntityLogicalName, change.ActualId);
+
+                    if (change.EntityLogicalName == "savedquery" && change.StateCode.Value == 1 && change.StatusCode.Value == 1)
+                    {
+                        container.SetState(entity, 1, 2);
+                    }
+                    else if (change.EntityLogicalName == "duplicaterule")
+                    {
+                        if (change.StatusCode.Value == 2)
+                        {
+                            container.PublishDuplicateRule(entity);
+                        }
+                        else
+                        {
+                            container.UnpublishDuplicateRule(entity);
+                        }
+                    }
+                    else
+                    {
+                        container.SetState(entity, change.StateCode.Value, change.StatusCode.Value);
+                    }
+
+                    updated++;
+                    SendLine(container, "{0:000} SetState (deferred): {1}: {2}/{3}", change.Position, change.Identifier, change.StateCode.Value, change.StatusCode.Value);
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} SetState Failed (deferred): {1} {2}", change.Position, change.Identifier, ex.Message);
+                    if (stoponerror)
+                    {
+                        throw;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies deferred owner changes in bulk when possible.
+        /// </summary>
+        private void FlushDeferredOwnerChanges(IExecutionContainer container, List<DeferredOwnerChange> changes, ref int updated, ref int failed)
+        {
+            if (changes.Count == 0)
+            {
+                return;
+            }
+
+            container.Log($"Applying {changes.Count} deferred owner changes");
+
+            foreach (var change in changes)
+            {
+                try
+                {
+                    if (change.ActualId == Guid.Empty)
+                    {
+                        failed++;
+                        SendLine(container, "{0:000} Assign Failed (deferred): {1} - ActualId not set", change.Position, change.Identifier);
+                        if (stoponerror)
+                        {
+                            throw new InvalidOperationException($"ActualId not set for deferred owner change on {change.Identifier}");
+                        }
+                        continue;
+                    }
+
+                    var entity = new Entity(change.EntityLogicalName, change.ActualId);
+                    container.Principal(entity).On(change.Owner).Assign();
+                    updated++;
+                    SendLine(container, "{0:000} Assigned (deferred): {1} to {2} {3}", change.Position, change.Identifier, change.Owner.LogicalName, string.IsNullOrEmpty(change.Owner.Name) ? change.Owner.Id.ToString() : change.Owner.Name);
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Assign Failed (deferred): {1} {2}", change.Position, change.Identifier, ex.Message);
+                    if (stoponerror)
+                    {
+                        throw;
+                    }
+                }
+            }
         }
 
         /// <summary>
