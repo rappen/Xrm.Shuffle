@@ -34,7 +34,8 @@ The Runner **executes a Shuffle Definition** — exporting data from or importin
 - Supports both **Export** (Dataverse → XML/CSV file) and **Import** (file → Dataverse) modes
 - Multiple serialization styles: Simple, SimpleWithValue, SimpleNoId, Explicit, Text, Full
 - Filter records by attribute value or supply your own FetchXML
-- Batches import operations using `ExecuteMultipleRequest` for high-performance large-dataset imports
+- High-performance bulk imports using **CreateMultiple/UpdateMultiple** on Dataverse (online) or **ExecuteMultipleRequest** on-premises
+- Automatic runtime detection and fallback for maximum compatibility across Dynamics CRM 9.1 and all Dataverse versions
 - Generates detailed, timestamped operation logs
 - Available in the XrmToolBox Tool Library as **`Rappen.XrmToolBox.Shuffle.Runner`**
 
@@ -146,10 +147,10 @@ Choose one of two query modes:
 | `CreateWithId` | boolean | `false` | Preserve the source record GUID when creating records in the target |
 | `UpdateInactive` | boolean | `false` | Allow updating inactive/disabled records |
 | `UpdateIdentical` | boolean | `false` | Send an update call even when no field values have changed |
-| `BatchSize` | int | `200` | Records per `ExecuteMultipleRequest` batch. Set to `1` to disable batching. Maximum `1000`. |
+| `BatchSize` | int | `100` | Records per bulk operation batch. Set to `1` to disable batching. Maximum `1000`. Microsoft recommends ~100 for standard tables. |
 | `Overwrite` | boolean | — | ⚠️ **Deprecated** — use `Save` instead |
 
-> **Performance tip:** `BatchSize` controls how many Create/Update/Delete operations are grouped into a single API call. Larger values significantly improve throughput for large imports. If records trigger complex plug-ins that need to run individually, reduce the value or set it to `1` to disable batching entirely.
+> **Performance tip:** Shuffle automatically uses **CreateMultiple/UpdateMultiple** bulk operations on Dataverse (online) for maximum throughput, falling back to **ExecuteMultipleRequest** for on-premises CRM 9.1 compatibility. `BatchSize` controls how many records are grouped per API call. The default of 100 aligns with Microsoft's recommendation for standard tables. Larger values (up to 1000) may improve throughput for simple operations. For records with complex plug-ins, reduce the value or set to `1` to disable batching entirely.
 
 `<Match>` — controls how the importer finds existing target records to decide whether to create or update:
 
@@ -174,11 +175,22 @@ Associates records from another `<DataBlock>` — used for N:N relationships or 
 
 ## Recent Changes
 
+### CreateMultiple/UpdateMultiple bulk operation support
+Import operations now use **CreateMultiple** and **UpdateMultiple** bulk messages on Dataverse (online) for significantly improved performance — up to 2-4× faster than ExecuteMultipleRequest for large datasets. The implementation includes:
+
+- **Runtime capability detection** — queries `sdkmessagefilter` to detect if bulk operations are supported for each entity type
+- **Per-entity caching** — capability checks are cached for the lifetime of the import run
+- **Graceful fallback** — automatically falls back to ExecuteMultipleRequest for on-premises CRM 9.1 or entities that don't support bulk operations
+- **Full backwards compatibility** — works seamlessly with Dynamics CRM 9.1 on-premises and all Dataverse versions
+- **Optimized default batch size** — reduced from 200 to 100 records per batch to align with Microsoft's recommendation for CreateMultiple/UpdateMultiple
+
+No configuration changes required — the system automatically detects the target environment's capabilities and selects the best available API.
+
 ### Multi-Select OptionSet support
 Export and import of Multi-Select OptionSet (OptionSetValueCollection) fields now works correctly. Previously, exported data.xml contained the literal string "OptionSetValueCollection" instead of actual values.
 
-### ExecuteMultipleRequest batching
-Import operations (Create, Update, Delete) are now batched using `ExecuteMultipleRequest` for significantly improved performance on large datasets. Configurable via the `BatchSize` attribute on the Import element (default: 200, max: 1000). Set to 1 to disable batching. The Shuffle Builder UI includes a new "Batch size" field.
+### ExecuteMultipleRequest batching (legacy)
+Import operations on on-premises Dynamics CRM 9.1 use `ExecuteMultipleRequest` for batching (Create, Update, Delete operations). Dataverse (online) environments automatically use the newer and faster CreateMultiple/UpdateMultiple APIs instead. Configurable via the `BatchSize` attribute on the Import element (default: 100, max: 1000). Set to 1 to disable batching. The Shuffle Builder UI includes a "Batch size" field.
 
 ### Deterministic XML export ordering
 Entity attributes are now sorted alphabetically during export, eliminating spurious diffs in version control when re-exporting unchanged data.
