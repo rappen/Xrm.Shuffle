@@ -328,11 +328,13 @@
                 }
 
                 // Determine if we can use Upsert path (eliminates need for PreRetrieveAll queries)
-                // Upsert is optimal when: Save=CreateUpdate, records have ID (CreateWithId), and records are batchable
+                // Upsert is optimal when: Save=CreateUpdate, records have ID (CreateWithId), records are batchable,
+                // AND UpdateIdentical=true (because Upsert cannot skip identical records - we don't retrieve existing data to compare)
                 var canUseUpsert = save == SaveTypes.CreateUpdate && 
                                    includeid && 
                                    matchattributes.Count > 0 &&
-                                   delete == DeleteTypes.None;
+                                   delete == DeleteTypes.None &&
+                                   updateidentical;
 
                 if (canUseUpsert)
                 {
