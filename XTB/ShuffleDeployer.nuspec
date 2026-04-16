@@ -5,7 +5,7 @@
 		<version>1.0.0</version>
 		<title>Shuffle Deployer for XrmToolBox</title>
 		<authors>Jonas Rapp, Imran Akram</authors>
-		<owners>rappen</owners>
+		<owners>rappen, imranakram</owners>
 		<projectUrl>https://jonasr.app/shuffle/</projectUrl>
 		<iconUrl>https://jonasr.app/wp-content/uploads/Shuffle2-D.png</iconUrl>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
@@ -19,7 +19,12 @@
 		</description>
 		<summary>Deploy solutions and datas with the Shuffle. Empower yourself to achieve more.</summary>
 		<releaseNotes>
-			Updated dependencies and bug fixes.
+- ExecuteMultipleRequest batching for import operations (configurable BatchSize, default 200)
+- Multi-Select OptionSet (OptionSetValueCollection) export/import support
+- Deterministic attribute ordering in XML export for clean version control diffs
+- Fixed off-by-one error in CSV/text export
+- Performance improvements: metadata lookup hoisting, HashSet deduplication, optimized attribute filtering
+- Update failure messages now include exception details
 		</releaseNotes>
 		<copyright>Copyright 2023-2026 Jonas Rapp, Imran Akram</copyright>
 		<tags>XrmToolBox Shuffle</tags>
@@ -29,6 +34,5 @@
 	</metadata>
 	<files>
 		<file src="bin\Release\Rappen.XTB.Shuffle.dll" target="lib\net48\Plugins" />
-		<file src="bin\Release\System.IO.Compression.dll" target="lib\net48\Plugins\Rappen.XrmToolBox.Shuffle.Deployer\System.IO.Compression.dll" />
 	</files>
 </package>
