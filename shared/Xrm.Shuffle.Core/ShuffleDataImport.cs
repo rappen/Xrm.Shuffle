@@ -1439,38 +1439,55 @@
 
             container.Log($"Executing ExecuteMultiple batch create of {batch.Count} records");
 
+            ExecuteMultipleResponse multiResponse;
             try
             {
-                var multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
-
-                for (var i = 0; i < batch.Count; i++)
-                {
-                    var item = batch[i];
-                    var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
-
-                    if (responseItem?.Fault != null)
-                    {
-                        failed++;
-                        SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, responseItem.Fault.Message);
-                    }
-                    else
-                    {
-                        if (responseItem?.Response is CreateResponse createResponse)
-                        {
-                            item.Entity.Id = createResponse.id;
-                        }
-                        created++;
-                        SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
-                        references.Add(item.Entity.ToEntityReference());
-                        MapGuid(item.OldId, item.Entity.Id);
-                    }
-                }
+                multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
             }
             catch (Exception ex)
             {
                 container.Log($"ExecuteMultiple batch create failed: {ex.Message}");
+                if (stoponerror)
+                {
+                    throw;
+                }
                 container.Log("Falling back to sequential creates");
                 FlushCreatesIndividually(container, batch, ref created, ref failed, references);
+                return;
+            }
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var item = batch[i];
+                var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+
+                if (responseItem == null)
+                {
+                    // ContinueOnError=false makes the platform stop at the first fault, leaving no
+                    // response for the requests after it. Those records were never created.
+                    failed++;
+                    SendLine(container, "{0:000} Create Not Executed: {1}", item.Position, item.Identifier);
+                    continue;
+                }
+                if (responseItem.Fault != null)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, responseItem.Fault.Message);
+                    if (stoponerror)
+                    {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                        throw new InvalidOperationException($"Create failed: {item.Identifier} {responseItem.Fault.Message}");
+                    }
+                    continue;
+                }
+                if (responseItem.Response is CreateResponse createResponse)
+                {
+                    item.Entity.Id = createResponse.id;
+                }
+                created++;
+                SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                references.Add(item.Entity.ToEntityReference());
+                MapGuid(item.OldId, item.Entity.Id);
             }
         }
 
@@ -1637,33 +1654,50 @@
 
             container.Log($"Executing ExecuteMultiple batch update of {batch.Count} records");
 
+            ExecuteMultipleResponse multiResponse;
             try
             {
-                var multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
-
-                for (var i = 0; i < batch.Count; i++)
-                {
-                    var item = batch[i];
-                    var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
-
-                    if (responseItem?.Fault != null)
-                    {
-                        failed++;
-                        SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, responseItem.Fault.Message);
-                    }
-                    else
-                    {
-                        updated++;
-                        SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
-                        references.Add(item.Entity.ToEntityReference());
-                    }
-                }
+                multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
             }
             catch (Exception ex)
             {
                 container.Log($"ExecuteMultiple batch update failed: {ex.Message}");
+                if (stoponerror)
+                {
+                    throw;
+                }
                 container.Log("Falling back to sequential updates");
                 FlushUpdatesIndividually(container, batch, ref updated, ref failed, references);
+                return;
+            }
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var item = batch[i];
+                var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+
+                if (responseItem == null)
+                {
+                    // ContinueOnError=false makes the platform stop at the first fault, leaving no
+                    // response for the requests after it. Those records were never updated.
+                    failed++;
+                    SendLine(container, "{0:000} Update Not Executed: {1} {2}", item.Position, item.Identifier, item.Entity.LogicalName);
+                    continue;
+                }
+                if (responseItem.Fault != null)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, responseItem.Fault.Message);
+                    if (stoponerror)
+                    {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                        throw new InvalidOperationException($"Update failed: {item.Identifier} {responseItem.Fault.Message}");
+                    }
+                    continue;
+                }
+                updated++;
+                SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                references.Add(item.Entity.ToEntityReference());
             }
         }
 
@@ -1920,56 +1954,10 @@
 
             container.Log($"Executing ExecuteMultiple with UpsertRequest for {batch.Count} {entityLogicalName} records");
 
+            ExecuteMultipleResponse multiResponse;
             try
             {
-                var multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
-
-                var upsertNotImplemented = false;
-                for (var i = 0; i < batch.Count; i++)
-                {
-                    var item = batch[i];
-                    var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
-
-                    if (responseItem?.Fault != null)
-                    {
-                        // Check if fault indicates Upsert not implemented
-                        if (responseItem.Fault.ErrorCode == MessageNotImplementedErrorCode)
-                        {
-                            upsertNotImplemented = true;
-                            break;
-                        }
-                        failed++;
-                        SendLine(container, "{0:000} Upsert Failed: {1} {2}", item.Position, item.Identifier, responseItem.Fault.Message);
-                    }
-                    else if (responseItem?.Response is UpsertResponse upsertResponse)
-                    {
-                        if (upsertResponse.RecordCreated)
-                        {
-                            if (upsertResponse.Target != null)
-                            {
-                                item.Entity.Id = upsertResponse.Target.Id;
-                            }
-                            created++;
-                            SendLine(container, "{0:000} Created (upsert): {1}", item.Position, item.Identifier);
-                        }
-                        else
-                        {
-                            updated++;
-                            SendLine(container, "{0:000} Updated (upsert): {1}", item.Position, item.Identifier);
-                        }
-                        references.Add(item.Entity.ToEntityReference());
-                        MapGuid(item.OldId, item.Entity.Id);
-                    }
-                }
-
-                if (upsertNotImplemented)
-                {
-                    container.Log("Upsert not implemented, marking as unsupported and falling back to Create/Update");
-                    MarkUpsertUnsupported(entityLogicalName);
-                    return false;
-                }
-
-                return true;
+                multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
             }
             catch (Exception ex)
             {
@@ -1982,10 +1970,72 @@
                     return false;
                 }
 
+                if (stoponerror)
+                {
+                    throw;
+                }
+
                 container.Log("Falling back to individual Create/Update operations");
                 FlushUpsertsAsCreateUpdate(container, batch, ref created, ref updated, ref failed, references);
                 return true;
             }
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var item = batch[i];
+                var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+
+                if (responseItem == null)
+                {
+                    // ContinueOnError=false makes the platform stop at the first fault, leaving no
+                    // response for the requests after it. Those records were never upserted.
+                    failed++;
+                    SendLine(container, "{0:000} Upsert Not Executed: {1}", item.Position, item.Identifier);
+                    continue;
+                }
+                if (responseItem.Fault != null)
+                {
+                    // Check if fault indicates Upsert not implemented
+                    if (responseItem.Fault.ErrorCode == MessageNotImplementedErrorCode)
+                    {
+                        container.Log("Upsert not implemented, marking as unsupported and falling back to Create/Update");
+                        MarkUpsertUnsupported(entityLogicalName);
+                        return false;
+                    }
+                    failed++;
+                    SendLine(container, "{0:000} Upsert Failed: {1} {2}", item.Position, item.Identifier, responseItem.Fault.Message);
+                    if (stoponerror)
+                    {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                        throw new InvalidOperationException($"Upsert failed: {item.Identifier} {responseItem.Fault.Message}");
+                    }
+                    continue;
+                }
+                if (!(responseItem.Response is UpsertResponse upsertResponse))
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Upsert Failed: {1} unexpected response {2}", item.Position, item.Identifier, responseItem.Response?.GetType().Name ?? "(none)");
+                    continue;
+                }
+                if (upsertResponse.RecordCreated)
+                {
+                    if (upsertResponse.Target != null)
+                    {
+                        item.Entity.Id = upsertResponse.Target.Id;
+                    }
+                    created++;
+                    SendLine(container, "{0:000} Created (upsert): {1}", item.Position, item.Identifier);
+                }
+                else
+                {
+                    updated++;
+                    SendLine(container, "{0:000} Updated (upsert): {1}", item.Position, item.Identifier);
+                }
+                references.Add(item.Entity.ToEntityReference());
+                MapGuid(item.OldId, item.Entity.Id);
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -2085,29 +2135,10 @@
                 multiRequest.Requests.Add(new DeleteRequest { Target = entity.ToEntityReference() });
             }
             container.Log($"Executing batch delete of {batch.Count} records");
+            ExecuteMultipleResponse multiResponse;
             try
             {
-                var multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
-                for (var i = 0; i < batch.Count; i++)
-                {
-                    var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
-                    if (responseItem?.Fault != null)
-                    {
-                        if (responseItem.Fault.Message.ToUpperInvariant().Contains("DOES NOT EXIST"))
-                        {
-                            SendLine(container, "      ...already deleted");
-                        }
-                        else
-                        {
-                            failed++;
-                            SendLine(container, "Delete Failed: {0} {1}", batch[i].LogicalName, responseItem.Fault.Message);
-                        }
-                    }
-                    else
-                    {
-                        deleted++;
-                    }
-                }
+                multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
             }
             catch (Exception ex)
             {
@@ -2132,6 +2163,40 @@
                         }
                     }
                 }
+                batch.Clear();
+                return;
+            }
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+                if (responseItem == null)
+                {
+                    // ContinueOnError=false makes the platform stop at the first fault, leaving no
+                    // response for the requests after it. Those records were never deleted.
+                    failed++;
+                    SendLine(container, "Delete Not Executed: {0}", batch[i].LogicalName);
+                    continue;
+                }
+                if (responseItem.Fault != null)
+                {
+                    if (responseItem.Fault.Message.ToUpperInvariant().Contains("DOES NOT EXIST"))
+                    {
+                        SendLine(container, "      ...already deleted");
+                    }
+                    else
+                    {
+                        failed++;
+                        SendLine(container, "Delete Failed: {0} {1}", batch[i].LogicalName, responseItem.Fault.Message);
+                        if (stoponerror)
+                        {
+                            container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                            throw new InvalidOperationException($"Delete failed: {batch[i].LogicalName} {responseItem.Fault.Message}");
+                        }
+                    }
+                    continue;
+                }
+                deleted++;
             }
             batch.Clear();
         }
