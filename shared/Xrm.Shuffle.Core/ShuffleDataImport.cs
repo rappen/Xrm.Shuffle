@@ -48,6 +48,18 @@
         /// </summary>
         private const int MessageNotImplementedErrorCode = unchecked((int)0x80040265);
 
+        /// <summary>
+        /// Deferred state changes for the block currently being imported.
+        /// Held as a field so that the batch flush methods can fill in the actual record id,
+        /// which is only known once the batch has been sent.
+        /// </summary>
+        private List<DeferredStateChange> deferredStates = new List<DeferredStateChange>();
+
+        /// <summary>
+        /// Deferred owner changes for the block currently being imported. See <see cref="deferredStates"/>.
+        /// </summary>
+        private List<DeferredOwnerChange> deferredOwners = new List<DeferredOwnerChange>();
+
         #endregion Bulk Operation Support Cache
 
         #region Private Methods
@@ -377,8 +389,8 @@
                 var pendingCreates = new List<PendingCreate>();
                 var pendingUpdates = new List<PendingUpdate>();
                 var pendingUpserts = new List<PendingUpsert>();
-                var deferredStates = new List<DeferredStateChange>();
-                var deferredOwners = new List<DeferredOwnerChange>();
+                deferredStates = new List<DeferredStateChange>();
+                deferredOwners = new List<DeferredOwnerChange>();
                 foreach (var cdEntity in cEntities.Entities)
                 {
                     var unique = cdEntity.Id.ToString();
@@ -607,7 +619,7 @@
 
                             if (deferStateAndOwner && !oldid.Equals(Guid.Empty) && !newid.Equals(Guid.Empty))
                             {
-                                UpdateDeferredActualIds(deferredStates, deferredOwners, oldid, newid);
+                                UpdateDeferredActualIds(oldid, newid);
                             }
 
                             #endregion Entity
@@ -1134,11 +1146,9 @@
         /// <summary>
         /// Updates the ActualId in deferred changes after a record is created or updated.
         /// </summary>
-        /// <param name="deferredStates">Deferred state changes to update.</param>
-        /// <param name="deferredOwners">Deferred owner changes to update.</param>
         /// <param name="originalId">The original Id from the import file.</param>
         /// <param name="actualId">The actual Id after create/update.</param>
-        private void UpdateDeferredActualIds(List<DeferredStateChange> deferredStates, List<DeferredOwnerChange> deferredOwners, Guid originalId, Guid actualId)
+        private void UpdateDeferredActualIds(Guid originalId, Guid actualId)
         {
             for (int i = 0; i < deferredStates.Count; i++)
             {
@@ -1396,7 +1406,7 @@
                 created++;
                 SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
                 references.Add(item.Entity.ToEntityReference());
-                MapGuid(item.OldId, item.Entity.Id);
+                RecordCreatedId(item.OldId, item.Entity.Id);
             }
             catch (Exception ex)
             {
@@ -1444,7 +1454,7 @@
                     created++;
                     SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
                     references.Add(item.Entity.ToEntityReference());
-                    MapGuid(item.OldId, item.Entity.Id);
+                    RecordCreatedId(item.OldId, item.Entity.Id);
                 }
                 return true;
             }
@@ -1540,7 +1550,7 @@
                 created++;
                 SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
                 references.Add(item.Entity.ToEntityReference());
-                MapGuid(item.OldId, item.Entity.Id);
+                RecordCreatedId(item.OldId, item.Entity.Id);
             }
         }
 
@@ -1557,7 +1567,7 @@
                     created++;
                     SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
                     references.Add(item.Entity.ToEntityReference());
-                    MapGuid(item.OldId, item.Entity.Id);
+                    RecordCreatedId(item.OldId, item.Entity.Id);
                 }
                 catch (Exception itemEx)
                 {
@@ -2259,6 +2269,23 @@
             if (!oldId.Equals(Guid.Empty) && !newId.Equals(Guid.Empty) && !oldId.Equals(newId) && !guidmap.ContainsKey(oldId))
             {
                 guidmap.Add(oldId, newId);
+            }
+        }
+
+        /// <summary>
+        /// Records the actual id of a created record: maps it for later lookup remapping, and fills in
+        /// the id of any deferred state or owner change waiting for that record.
+        /// The import loop only does this itself for records it created inline; a record created from a
+        /// batch has no id at that point, so the flush methods must do it here instead.
+        /// This is deliberately not folded into <see cref="MapGuid"/>: the guid map skips ids that are
+        /// unchanged or already mapped, but a deferred change still needs its id in both those cases.
+        /// </summary>
+        private void RecordCreatedId(Guid oldId, Guid newId)
+        {
+            MapGuid(oldId, newId);
+            if (!oldId.Equals(Guid.Empty) && !newId.Equals(Guid.Empty))
+            {
+                UpdateDeferredActualIds(oldId, newId);
             }
         }
 
