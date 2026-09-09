@@ -268,6 +268,11 @@
         <xs:documentation>Number of records per ExecuteMultipleRequest batch. Set to 1 to disable batching. Max 1000.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
+    <xs:attribute name="DeferStateAndOwner" type="xs:boolean" use="optional" default="false">
+      <xs:annotation>
+        <xs:documentation>Strip statecode/statuscode/ownerid from records during import and apply them in a second pass, keeping the records themselves batchable.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
   </xs:complexType>
 
 
