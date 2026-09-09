@@ -81,6 +81,12 @@ a time, so a block of inactive or non-default-owner records gets no batching at 
 Deferring keeps those records batchable and moves the state/owner work into a separate
 pass that can itself be batched. The end state of each record is unchanged.
 
+The option is ignored for a block whose records carry *nothing but* state and owner —
+a common pattern where the state changes live in their own `Save="UpdateOnly"` block.
+Stripping there would leave empty records to save, so `IsStateOwnerOnlyBlock` turns the
+option off for the block and logs that it did; `HasAttributesBesidesStateOwner` catches
+the same case per record in a mixed block.
+
 No benchmark numbers are published for this — the gain depends entirely on how many
 records in the block carry those attributes.
 
