@@ -1290,8 +1290,9 @@
         /// </summary>
         private void ApplyStatesIndividually(IExecutionContainer container, List<DeferredStateChange> batch, ref int updated, ref int failed)
         {
-            foreach (var change in batch)
+            for (var i = 0; i < batch.Count; i++)
             {
+                var change = batch[i];
                 try
                 {
                     if (change.ActualId == Guid.Empty)
@@ -1300,6 +1301,7 @@
                         SendLine(container, "{0:000} SetState Failed (deferred): {1} - ActualId not set", change.Position, change.Identifier);
                         if (stoponerror)
                         {
+                            container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                             throw new InvalidOperationException($"ActualId not set for deferred state change on {change.Identifier}");
                         }
                         continue;
@@ -1336,6 +1338,7 @@
                     SendLine(container, "{0:000} SetState Failed (deferred): {1} {2}", change.Position, change.Identifier, ex.Message);
                     if (stoponerror)
                     {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                         throw;
                     }
                 }
@@ -1354,8 +1357,9 @@
 
             container.Log($"Applying {changes.Count} deferred owner changes");
 
-            foreach (var change in changes)
+            for (var i = 0; i < changes.Count; i++)
             {
+                var change = changes[i];
                 try
                 {
                     if (change.ActualId == Guid.Empty)
@@ -1364,6 +1368,7 @@
                         SendLine(container, "{0:000} Assign Failed (deferred): {1} - ActualId not set", change.Position, change.Identifier);
                         if (stoponerror)
                         {
+                            container.Log($"StopOnError: aborting, {changes.Count - i - 1} record(s) in this batch were not executed");
                             throw new InvalidOperationException($"ActualId not set for deferred owner change on {change.Identifier}");
                         }
                         continue;
@@ -1380,6 +1385,7 @@
                     SendLine(container, "{0:000} Assign Failed (deferred): {1} {2}", change.Position, change.Identifier, ex.Message);
                     if (stoponerror)
                     {
+                        container.Log($"StopOnError: aborting, {changes.Count - i - 1} record(s) in this batch were not executed");
                         throw;
                     }
                 }
@@ -1588,8 +1594,9 @@
         /// </summary>
         private void FlushCreatesIndividually(IExecutionContainer container, List<PendingCreate> batch, ref int created, ref int failed, EntityReferenceCollection references)
         {
-            foreach (var item in batch)
+            for (var i = 0; i < batch.Count; i++)
             {
+                var item = batch[i];
                 try
                 {
                     container.Create(item.Entity);
@@ -1604,6 +1611,7 @@
                     SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, itemEx.Message);
                     if (stoponerror)
                     {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                         throw;
                     }
                 }
@@ -1799,8 +1807,9 @@
         /// </summary>
         private void FlushUpdatesIndividually(IExecutionContainer container, List<PendingUpdate> batch, ref int updated, ref int failed, EntityReferenceCollection references)
         {
-            foreach (var item in batch)
+            for (var i = 0; i < batch.Count; i++)
             {
+                var item = batch[i];
                 try
                 {
                     container.Update(item.Entity);
@@ -1814,6 +1823,7 @@
                     SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, itemEx.Message);
                     if (stoponerror)
                     {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                         throw;
                     }
                 }
@@ -2138,8 +2148,9 @@
         {
             container.Log($"Falling back to Create/Update for {batch.Count} records (Upsert not available)");
 
-            foreach (var item in batch)
+            for (var i = 0; i < batch.Count; i++)
             {
+                var item = batch[i];
                 try
                 {
                     // Attempt Create first
@@ -2172,6 +2183,7 @@
                             SendLine(container, "{0:000} Update Failed (fallback): {1} {2}", item.Position, item.Identifier, updateEx.Message);
                             if (stoponerror)
                             {
+                                container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                                 throw;
                             }
                         }
@@ -2182,6 +2194,7 @@
                         SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, createEx.Message);
                         if (stoponerror)
                         {
+                            container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                             throw;
                         }
                     }
@@ -2192,6 +2205,7 @@
                     SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
                     if (stoponerror)
                     {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                         throw;
                     }
                 }
