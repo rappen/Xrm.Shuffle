@@ -43,6 +43,11 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             this.chkUpdateIdentical = new System.Windows.Forms.CheckBox();
             this.label8 = new System.Windows.Forms.Label();
             this.txtBatchSize = new System.Windows.Forms.TextBox();
+            this.label9 = new System.Windows.Forms.Label();
+            this.chkDeferStateAndOwner = new System.Windows.Forms.CheckBox();
+            this.lblDeferStateAndOwnerHelp = new System.Windows.Forms.Label();
+            this.components = new System.ComponentModel.Container();
+            this.tooltips = new System.Windows.Forms.ToolTip(this.components);
             this.SuspendLayout();
             // 
             // chkCreateWithId
@@ -141,7 +146,7 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             // lblDeprecated
             // 
             this.lblDeprecated.AutoSize = true;
-            this.lblDeprecated.Location = new System.Drawing.Point(4, 154);
+            this.lblDeprecated.Location = new System.Drawing.Point(4, 185);
             this.lblDeprecated.Name = "lblDeprecated";
             this.lblDeprecated.Size = new System.Drawing.Size(66, 13);
             this.lblDeprecated.TabIndex = 12;
@@ -151,7 +156,7 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             // lblDeprOverwrite
             // 
             this.lblDeprOverwrite.AutoSize = true;
-            this.lblDeprOverwrite.Location = new System.Drawing.Point(7, 171);
+            this.lblDeprOverwrite.Location = new System.Drawing.Point(7, 202);
             this.lblDeprOverwrite.Name = "lblDeprOverwrite";
             this.lblDeprOverwrite.Size = new System.Drawing.Size(52, 13);
             this.lblDeprOverwrite.TabIndex = 13;
@@ -160,7 +165,7 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             // 
             // txtOverwrite
             // 
-            this.txtOverwrite.Location = new System.Drawing.Point(213, 168);
+            this.txtOverwrite.Location = new System.Drawing.Point(213, 199);
             this.txtOverwrite.Name = "txtOverwrite";
             this.txtOverwrite.Size = new System.Drawing.Size(234, 20);
             this.txtOverwrite.TabIndex = 20;
@@ -201,12 +206,56 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             this.txtBatchSize.Name = "txtBatchSize";
             this.txtBatchSize.Size = new System.Drawing.Size(80, 20);
             this.txtBatchSize.TabIndex = 22;
-            this.txtBatchSize.Tag = "BatchSize|false|200";
-            // 
+            this.txtBatchSize.Tag = "BatchSize|false|100";
+            this.tooltips.SetToolTip(this.txtBatchSize, "Number of records sent to the server per bulk request. Default 100.");
+            //
+            // label9
+            //
+            this.label9.AutoSize = true;
+            this.label9.Location = new System.Drawing.Point(4, 161);
+            this.label9.Name = "label9";
+            this.label9.Size = new System.Drawing.Size(114, 13);
+            this.label9.TabIndex = 23;
+            this.label9.Text = "Defer state and owner";
+            this.tooltips.SetToolTip(this.label9, DeferStateAndOwnerHelp);
+            //
+            // chkDeferStateAndOwner
+            //
+            this.chkDeferStateAndOwner.AutoSize = true;
+            this.chkDeferStateAndOwner.Location = new System.Drawing.Point(213, 161);
+            this.chkDeferStateAndOwner.Name = "chkDeferStateAndOwner";
+            this.chkDeferStateAndOwner.Size = new System.Drawing.Size(15, 14);
+            this.chkDeferStateAndOwner.TabIndex = 24;
+            this.chkDeferStateAndOwner.Tag = "DeferStateAndOwner|false|false";
+            this.chkDeferStateAndOwner.UseVisualStyleBackColor = true;
+            this.tooltips.SetToolTip(this.chkDeferStateAndOwner, DeferStateAndOwnerHelp);
+            //
+            // lblDeferStateAndOwnerHelp
+            //
+            this.lblDeferStateAndOwnerHelp.AutoSize = true;
+            this.lblDeferStateAndOwnerHelp.Cursor = System.Windows.Forms.Cursors.Help;
+            this.lblDeferStateAndOwnerHelp.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold);
+            this.lblDeferStateAndOwnerHelp.ForeColor = System.Drawing.SystemColors.HotTrack;
+            this.lblDeferStateAndOwnerHelp.Location = new System.Drawing.Point(234, 160);
+            this.lblDeferStateAndOwnerHelp.Name = "lblDeferStateAndOwnerHelp";
+            this.lblDeferStateAndOwnerHelp.Size = new System.Drawing.Size(13, 13);
+            this.lblDeferStateAndOwnerHelp.TabIndex = 25;
+            this.lblDeferStateAndOwnerHelp.Text = "?";
+            this.tooltips.SetToolTip(this.lblDeferStateAndOwnerHelp, DeferStateAndOwnerHelp);
+            //
+            // tooltips
+            //
+            this.tooltips.AutoPopDelay = 20000;
+            this.tooltips.InitialDelay = 300;
+            this.tooltips.ReshowDelay = 100;
+            //
             // DataBlockImportControl
-            // 
+            //
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.Controls.Add(this.lblDeferStateAndOwnerHelp);
+            this.Controls.Add(this.label9);
+            this.Controls.Add(this.chkDeferStateAndOwner);
             this.Controls.Add(this.label8);
             this.Controls.Add(this.txtBatchSize);
             this.Controls.Add(this.label7);
@@ -239,6 +288,9 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             this.Controls.SetChildIndex(this.label7, 0);
             this.Controls.SetChildIndex(this.txtBatchSize, 0);
             this.Controls.SetChildIndex(this.label8, 0);
+            this.Controls.SetChildIndex(this.chkDeferStateAndOwner, 0);
+            this.Controls.SetChildIndex(this.label9, 0);
+            this.Controls.SetChildIndex(this.lblDeferStateAndOwnerHelp, 0);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -261,5 +313,9 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
         private System.Windows.Forms.CheckBox chkUpdateIdentical;
         private System.Windows.Forms.Label label8;
         private System.Windows.Forms.TextBox txtBatchSize;
+        private System.Windows.Forms.Label label9;
+        private System.Windows.Forms.CheckBox chkDeferStateAndOwner;
+        private System.Windows.Forms.Label lblDeferStateAndOwnerHelp;
+        private System.Windows.Forms.ToolTip tooltips;
     }
 }
