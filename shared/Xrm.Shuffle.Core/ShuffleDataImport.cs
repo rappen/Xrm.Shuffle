@@ -337,6 +337,16 @@
                 var batchsize = Math.Max(1, Math.Min(block.Import.BatchSize, 1000));
                 var deferStateAndOwner = block.Import.DeferStateAndOwner;
 
+                if (deferStateAndOwner && IsStateOwnerOnlyBlock(cEntities))
+                {
+                    // A block that carries nothing but state and owner is already a second pass in
+                    // its own right - a common pattern where the state changes live in a separate
+                    // UpdateOnly block. Deferring here would strip every attribute and leave empty
+                    // records to save, so the option is ignored rather than obeyed.
+                    deferStateAndOwner = false;
+                    SendLine(container, "DeferStateAndOwner ignored - this block carries no attributes besides state and owner");
+                }
+
                 if (deferStateAndOwner)
                 {
                     SendLine(container, "DeferStateAndOwner enabled - state/owner will be applied in second pass");
@@ -1104,6 +1114,30 @@
         }
 
         /// <summary>
+        /// The attributes DeferStateAndOwner strips off a record and applies in a second pass.
+        /// </summary>
+        private static readonly string[] stateownerattributes = { "statecode", "statuscode", "ownerid" };
+
+        /// <summary>
+        /// Determines whether a record carries anything at all besides state and owner, ignoring
+        /// its own primary id. Stripping the state and owner off a record that carries nothing else
+        /// would leave nothing to save.
+        /// </summary>
+        private static bool HasAttributesBesidesStateOwner(Entity entity)
+        {
+            var primaryid = entity.LogicalName + "id";
+            return entity.Attributes.Keys.Any(a => !stateownerattributes.Contains(a) && a != primaryid);
+        }
+
+        /// <summary>
+        /// Determines whether every record in the block carries nothing besides state and owner.
+        /// </summary>
+        private static bool IsStateOwnerOnlyBlock(EntityCollection cEntities)
+        {
+            return cEntities?.Entities.Count > 0 && !cEntities.Entities.Any(HasAttributesBesidesStateOwner);
+        }
+
+        /// <summary>
         /// Strips statecode, statuscode, and ownerid from an entity and defers them for later bulk application.
         /// </summary>
         /// <param name="entity">The entity to strip attributes from.</param>
@@ -1113,6 +1147,13 @@
         /// <param name="identifier">Record identifier for logging.</param>
         private void StripAndDeferStateOwner(Entity entity, List<DeferredStateChange> deferredStates, List<DeferredOwnerChange> deferredOwners, int position, string identifier)
         {
+            if (!HasAttributesBesidesStateOwner(entity))
+            {
+                // Nothing would be left to save. See IsStateOwnerOnlyBlock - this catches the odd
+                // record in a block that is otherwise worth deferring.
+                return;
+            }
+
             var originalId = entity.Id;
 
             if (entity.Contains("statecode") && entity.Contains("statuscode"))
