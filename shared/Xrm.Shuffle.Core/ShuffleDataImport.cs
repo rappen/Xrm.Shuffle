@@ -101,7 +101,14 @@
                         matchdisplay = attribute.Name;
                     }
                     var matchvalue = "<null>";
-                    if (cdEntity.Contains(matchdisplay, true))
+                    if (matchdisplay == container.Entity(cdEntity.LogicalName).PrimaryIdAttribute)
+                    {   // The primary key is carried in Entity.Id, never in Entity.Attributes, so
+                        // the Contains check below can never see it and every block matching on the
+                        // primary key would log <null> for every record. EntityAttributesEqual
+                        // special-cases it the same way when comparing.
+                        matchvalue = cdEntity.Id.ToString();
+                    }
+                    else if (cdEntity.Contains(matchdisplay, true))
                     {
                         if (cdEntity[matchdisplay] is EntityReference)
                         {   // Don't use PropertyAsString, that would perform GetRelated that we don't want due to performance
