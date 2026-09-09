@@ -1487,12 +1487,13 @@
                     return false;
                 }
 
+                // CreateMultiple is a single transactional request, so a fault rolled the whole
+                // batch back and nothing was written. Re-run the rows through the per-record
+                // path even when StopOnError is set: that is the only way to name the record
+                // that actually faulted, and it restores the pre-batching behaviour of
+                // committing the rows ahead of it. FlushCreatesIndividually reports the
+                // failing row and then honours StopOnError itself.
                 container.Log("CreateMultiple batch failed, falling back to individual creates");
-                if (stoponerror)
-                {
-                    throw;
-                }
-
                 FlushCreatesIndividually(container, batch, ref created, ref failed, references);
                 return true;
             }
@@ -1702,12 +1703,13 @@
                     return false;
                 }
 
+                // UpdateMultiple is a single transactional request, so a fault rolled the whole
+                // batch back and nothing was written. Re-run the rows through the per-record
+                // path even when StopOnError is set: that is the only way to name the record
+                // that actually faulted, and it restores the pre-batching behaviour of
+                // committing the rows ahead of it. FlushUpdatesIndividually reports the
+                // failing row and then honours StopOnError itself.
                 container.Log("UpdateMultiple batch failed, falling back to individual updates");
-                if (stoponerror)
-                {
-                    throw;
-                }
-
                 FlushUpdatesIndividually(container, batch, ref updated, ref failed, references);
                 return true;
             }
@@ -2000,12 +2002,13 @@
                     return false;
                 }
 
+                // UpsertMultiple is a single transactional request, so a fault rolled the whole
+                // batch back and nothing was written. Re-run the rows through the per-record
+                // path even when StopOnError is set: that is the only way to name the record
+                // that actually faulted, and it restores the pre-batching behaviour of
+                // committing the rows ahead of it. TryFlushUpsertsWithExecuteMultiple reports the
+                // failing row and then honours StopOnError itself.
                 container.Log("UpsertMultiple batch failed, falling back to ExecuteMultiple with Upsert");
-                if (stoponerror)
-                {
-                    throw;
-                }
-
                 // Try ExecuteMultiple with individual Upsert requests
                 return TryFlushUpsertsWithExecuteMultiple(container, batch, ref created, ref updated, ref failed, references);
             }
@@ -2051,11 +2054,9 @@
                     return false;
                 }
 
-                if (stoponerror)
-                {
-                    throw;
-                }
-
+                // The request itself failed, so no item was applied. Upsert is idempotent, so
+                // re-running the batch as Create/Update is safe and is the only way to name the
+                // failing record. FlushUpsertsAsCreateUpdate honours StopOnError itself.
                 container.Log("Falling back to individual Create/Update operations");
                 FlushUpsertsAsCreateUpdate(container, batch, ref created, ref updated, ref failed, references);
                 return true;
