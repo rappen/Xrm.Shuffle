@@ -163,12 +163,13 @@
                 }
                 if (cdAsyncOperation != null)
                 {
-                    container.Attribute(SystemJob.StatusReason).On(cdAsyncOperation).ToString();
-                    statustext = container.Attribute(SystemJob.StatusReason).On(cdAsyncOperation).ToString();
                     var newStatus = cdAsyncOperation.GetAttribute(SystemJob.StatusReason, new OptionSetValue()).Value;
                     if (newStatus != importStatus)
                     {
                         importStatus = newStatus;
+                        statustext = cdAsyncOperation.FormattedValues.Contains(SystemJob.StatusReason)
+                            ? cdAsyncOperation.FormattedValues[SystemJob.StatusReason]
+                            : importStatus.ToString();
                         if (end.Equals(DateTime.MaxValue) && importStatus != (int)SystemJob.StatusReason_OptionSet.Waiting)
                         {
                             end = timeout > 0 ? DateTime.Now.AddMinutes(timeout) : DateTime.Now.AddMinutes(2);
@@ -208,9 +209,13 @@
                                     SendLine(container, "See log file for technical details.");
                                 }
                             }
-                            container.Attribute(SystemJob.Status).On(cdAsyncOperation).ToString();
-
-                            ex = new Exception($"Solution Import Failed: {container.Attribute(SystemJob.Status).On(cdAsyncOperation).ToString()} - {container.Attribute(SystemJob.StatusReason).On(cdAsyncOperation).ToString()}");
+                            var statusLabel = cdAsyncOperation.FormattedValues.Contains(SystemJob.Status)
+                                ? cdAsyncOperation.FormattedValues[SystemJob.Status]
+                                : cdAsyncOperation.GetAttribute(SystemJob.Status, new OptionSetValue()).Value.ToString();
+                            var reasonLabel = cdAsyncOperation.FormattedValues.Contains(SystemJob.StatusReason)
+                                ? cdAsyncOperation.FormattedValues[SystemJob.StatusReason]
+                                : importStatus.ToString();
+                            ex = new Exception($"Solution Import Failed: {statusLabel} - {reasonLabel}");
 
                             break;
                         }

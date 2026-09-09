@@ -257,3 +257,4 @@ VSIX/
 pat.txt
 test.txt
 /codealike.json
+/.claude/settings.local.json
