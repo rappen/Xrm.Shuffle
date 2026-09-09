@@ -88,7 +88,7 @@
             return match;
         }
 
-        private static string GetEntityDisplayString(DataBlockImportMatch match, Entity cdEntity)
+        private static string GetEntityDisplayString(IExecutionContainer container, DataBlockImportMatch match, Entity cdEntity)
         {
             var unique = new List<string>();
             if (match != null && match.Attribute.Length > 0)
@@ -100,7 +100,17 @@
                     {
                         matchdisplay = attribute.Name;
                     }
-                    unique.Add(cdEntity.AttributeAsString(matchdisplay, "<null>", true));
+                    if (matchdisplay == container.Entity(cdEntity.LogicalName).PrimaryIdAttribute)
+                    {   // The primary key is carried in Entity.Id, never in Entity.Attributes, so
+                        // reading it as an attribute would log <null> for every record of a block
+                        // matching on the primary key. EntityAttributesEqual special-cases it the
+                        // same way when comparing.
+                        unique.Add(cdEntity.Id.ToString());
+                    }
+                    else
+                    {
+                        unique.Add(cdEntity.AttributeAsString(matchdisplay, "<null>", true));
+                    }
                 }
             }
             if (unique.Count == 0)
@@ -398,7 +408,7 @@
 
                         ReplaceGuids(container, cdEntity, includeid);
                         ReplaceUpdateInfo(cdEntity);
-                        unique = GetEntityDisplayString(block.Import.Match, cdEntity);
+                        unique = GetEntityDisplayString(container, block.Import.Match, cdEntity);
                         SendStatus(null, unique);
 
                         if (deferStateAndOwner)
