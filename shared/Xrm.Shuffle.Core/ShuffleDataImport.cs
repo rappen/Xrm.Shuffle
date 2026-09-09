@@ -1880,6 +1880,12 @@
 
             var entityLogicalName = batch[0].Entity.LogicalName;
 
+            // Neither Upsert nor UpsertMultiple is reported as supported for the custom entities
+            // tested so far, on either an on-premises 9.1 org or an online one, so both paths below
+            // currently fall straight through to Create/Update. They are kept because support is
+            // per-entity: several out-of-the-box tables already carry Upsert, and Microsoft enables
+            // the bulk messages on more tables over time. Detection is per entity and cached, so an
+            // org that gains support starts using it with no change here.
             if (IsUpsertMultipleSupported(container, entityLogicalName))
             {
                 if (TryFlushUpsertsWithUpsertMultiple(container, batch, ref created, ref updated, ref failed, references))
