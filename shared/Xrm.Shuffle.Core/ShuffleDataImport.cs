@@ -388,6 +388,14 @@
                         var oldid = cdEntity.Id;
                         var newid = Guid.Empty;
 
+                        // ReplaceGuids rewrites this record's lookups using guidmap, so any record it
+                        // points at must already be committed. Flush first if this record references
+                        // one that is still pending, otherwise the lookup keeps the source-system id.
+                        if (ReferencesPendingCreate(cdEntity, pendingCreates))
+                        {
+                            FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                        }
+
                         ReplaceGuids(container, cdEntity, includeid);
                         ReplaceUpdateInfo(cdEntity);
                         unique = GetEntityDisplayString(container, block.Import.Match, cdEntity);
@@ -464,9 +472,13 @@
                             }
                             else
                             {
-                                // Original match-based path
-                                // Flush batches before matching to ensure guidmap is up to date
-                                if (pendingCreates.Count > 0)
+                                // Original match-based path.
+                                // A live match query must see the records created so far, so the batch
+                                // has to be flushed first. PreRetrieveAll matches against a snapshot
+                                // taken once at the start of the block, which never sees records created
+                                // during the block whether we flush or not - so there the flush buys
+                                // nothing and would defeat batching for every matched block.
+                                if (!preretrieveall && pendingCreates.Count > 0)
                                 {
                                     FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
                                 }
@@ -689,6 +701,47 @@
                 return new EntityReference(logicname, id);
             }
             return null;
+        }
+
+        /// <summary>
+        /// Determines whether the record holds a reference to a record that is still waiting in the
+        /// create batch. Such a reference cannot be remapped by <see cref="ReplaceGuids"/> yet, because
+        /// the referenced record has no real id until its batch is sent.
+        /// </summary>
+        private static bool ReferencesPendingCreate(Entity cdEntity, List<PendingCreate> pendingCreates)
+        {
+            if (pendingCreates.Count == 0)
+            {
+                return false;
+            }
+            foreach (var prop in cdEntity.Attributes)
+            {
+                Guid referenced;
+                if (prop.Value is EntityReference er)
+                {
+                    referenced = er.Id;
+                }
+                else if (prop.Value is Guid guid)
+                {
+                    referenced = guid;
+                }
+                else
+                {
+                    continue;
+                }
+                if (referenced.Equals(Guid.Empty))
+                {
+                    continue;
+                }
+                foreach (var pending in pendingCreates)
+                {
+                    if (pending.OldId.Equals(referenced))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         private void ReplaceGuids(IExecutionContainer container, Entity cdEntity, bool includeid)
