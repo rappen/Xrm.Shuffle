@@ -117,9 +117,12 @@
                         }
                         else
                         {
+                            // Records deserialized from a data file carry no FormattedValues, so the
+                            // fallback has to unwrap the SDK type itself - a plain ToString() on an
+                            // OptionSetValue or Money renders the type name, not the value.
                             matchvalue = cdEntity.FormattedValues.Contains(matchdisplay)
                                 ? cdEntity.FormattedValues[matchdisplay]
-                                : cdEntity[matchdisplay]?.ToString() ?? "";
+                                : container.AttributeAsBaseType(cdEntity, matchdisplay, string.Empty, true)?.ToString() ?? "";
                         }
                     }
                     unique.Add(matchvalue);
