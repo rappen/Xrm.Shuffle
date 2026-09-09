@@ -23,6 +23,7 @@
 - New Import option DeferStateAndOwner: statecode/statuscode/ownerid are applied in a second pass so the records themselves stay batchable
 - Batching now also engages for blocks that use Match, except where a live match query has to see the pending records first
 - Failed rows in a batch are reported and no longer counted as successes
+- Rows rejected because they match several records in the target now log the row number, like every other result line
 - Multi-Select OptionSet (OptionSetValueCollection) export/import support
 - Deterministic attribute ordering in XML export for clean version control diffs
 - Fixed off-by-one error in CSV/text export

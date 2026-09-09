@@ -620,8 +620,7 @@
                                 else
                                 {
                                     failed++;
-                                    SendLine(container, $"Import object matches {matches.Count()} records in target database!");
-                                    SendLine(container, unique);
+                                    SendLine(container, "{0:000} Match Failed: {1} matches {2} records in target database", i, unique, matches.Count());
                                 }
                             }
                             if (!oldid.Equals(Guid.Empty) && !newid.Equals(Guid.Empty) && !oldid.Equals(newid) && !guidmap.ContainsKey(oldid))
