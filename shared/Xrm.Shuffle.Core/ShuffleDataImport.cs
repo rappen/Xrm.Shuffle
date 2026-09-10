@@ -60,6 +60,17 @@
         /// </summary>
         private List<DeferredOwnerChange> deferredOwners = new List<DeferredOwnerChange>();
 
+        /// <summary>
+        /// Names the record that actually faulted inside a batch flush, so the per-record catch
+        /// can label the error with it.
+        /// </summary>
+        /// <remarks>
+        /// A flush is triggered by whichever record fills the batch, so the enclosing loop
+        /// variable points at the last record enqueued - not at the one that failed several
+        /// records earlier. Null when the fault did not come from a batch.
+        /// </remarks>
+        private string batchFailureLabel;
+
         #endregion Bulk Operation Support Cache
 
         #region Private Methods
@@ -392,6 +403,7 @@
                 foreach (var cdEntity in cEntities.Entities)
                 {
                     var unique = cdEntity.Id.ToString();
+                    batchFailureLabel = null;
                     SendStatus(-1, -1, totalRecords, i);
                     try
                     {
@@ -669,7 +681,7 @@
                     catch (Exception ex)
                     {
                         failed++;
-                        SendLine(container, $"\n*** Error record: {unique} ***\n{ex.Message}");
+                        SendLine(container, $"\n*** Error record: {batchFailureLabel ?? unique} ***\n{ex.Message}");
                         container.Log(ex);
                         if (stoponerror)
                         {
@@ -1399,6 +1411,26 @@
         }
 
         /// <summary>
+        /// Records which batched record faulted and says whether the flush must abort.
+        /// </summary>
+        /// <remarks>
+        /// Callers keep their own <c>throw;</c> so the original stack survives. The label is what
+        /// the per-record catch in <see cref="ImportDataBlock"/> reports; without it that catch
+        /// names whichever record happened to fill the batch.
+        /// </remarks>
+        private bool StopOnBatchError(int position, string identifier)
+        {
+            if (!stoponerror)
+            {
+                return false;
+            }
+
+            batchFailureLabel = string.Format("{0:000} {1}", position, identifier);
+            return true;
+        }
+
+
+        /// <summary>
         /// Flushes pending create operations using CreateMultiple when supported, falling back to ExecuteMultiple or individual calls.
         /// </summary>
         /// <param name="container">The execution container.</param>
@@ -1452,7 +1484,7 @@
             {
                 failed++;
                 SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
-                if (stoponerror)
+                if (StopOnBatchError(item.Position, item.Identifier))
                 {
                     throw;
                 }
@@ -1577,7 +1609,7 @@
                 {
                     failed++;
                     SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, responseItem.Fault.Message);
-                    if (stoponerror)
+                    if (StopOnBatchError(item.Position, item.Identifier))
                     {
                         container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                         throw new InvalidOperationException($"Create failed: {item.Identifier} {responseItem.Fault.Message}");
@@ -1615,7 +1647,7 @@
                 {
                     failed++;
                     SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, itemEx.Message);
-                    if (stoponerror)
+                    if (StopOnBatchError(item.Position, item.Identifier))
                     {
                         container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                         throw;
@@ -1677,7 +1709,7 @@
             {
                 failed++;
                 SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, ex.Message);
-                if (stoponerror)
+                if (StopOnBatchError(item.Position, item.Identifier))
                 {
                     throw;
                 }
@@ -1795,7 +1827,7 @@
                 {
                     failed++;
                     SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, responseItem.Fault.Message);
-                    if (stoponerror)
+                    if (StopOnBatchError(item.Position, item.Identifier))
                     {
                         container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                         throw new InvalidOperationException($"Update failed: {item.Identifier} {responseItem.Fault.Message}");
@@ -1827,7 +1859,7 @@
                 {
                     failed++;
                     SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, itemEx.Message);
-                    if (stoponerror)
+                    if (StopOnBatchError(item.Position, item.Identifier))
                     {
                         container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                         throw;
@@ -1936,7 +1968,7 @@
                     {
                         failed++;
                         SendLine(container, "{0:000} Upsert Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
-                        if (stoponerror)
+                        if (StopOnBatchError(item.Position, item.Identifier))
                         {
                             throw;
                         }
@@ -1958,7 +1990,7 @@
             {
                 failed++;
                 SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
-                if (stoponerror)
+                if (StopOnBatchError(item.Position, item.Identifier))
                 {
                     throw;
                 }
@@ -2118,7 +2150,7 @@
                     }
                     failed++;
                     SendLine(container, "{0:000} Upsert Failed: {1} {2}", item.Position, item.Identifier, responseItem.Fault.Message);
-                    if (stoponerror)
+                    if (StopOnBatchError(item.Position, item.Identifier))
                     {
                         container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                         throw new InvalidOperationException($"Upsert failed: {item.Identifier} {responseItem.Fault.Message}");
@@ -2193,7 +2225,7 @@
                         {
                             failed++;
                             SendLine(container, "{0:000} Update Failed (fallback): {1} {2}", item.Position, item.Identifier, updateEx.Message);
-                            if (stoponerror)
+                            if (StopOnBatchError(item.Position, item.Identifier))
                             {
                                 container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                                 throw;
@@ -2204,7 +2236,7 @@
                     {
                         failed++;
                         SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, createEx.Message);
-                        if (stoponerror)
+                        if (StopOnBatchError(item.Position, item.Identifier))
                         {
                             container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                             throw;
@@ -2215,7 +2247,7 @@
                 {
                     failed++;
                     SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
-                    if (stoponerror)
+                    if (StopOnBatchError(item.Position, item.Identifier))
                     {
                         container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
                         throw;
