@@ -706,8 +706,8 @@
 
                 if (deferStateAndOwner)
                 {
-                    FlushDeferredStateChanges(container, deferredStates, ref updated, ref failed);
-                    FlushDeferredOwnerChanges(container, deferredOwners, ref updated, ref failed);
+                    FlushDeferredStateChanges(container, deferredStates);
+                    FlushDeferredOwnerChanges(container, deferredOwners);
                 }
 
                 SendLine(container, $"Created: {created} Updated: {updated} Skipped: {skipped} Deleted: {deleted} Failed: {failed}");
@@ -1224,8 +1224,14 @@
         /// <summary>
         /// Applies deferred state changes in bulk using UpdateMultiple when supported.
         /// </summary>
-        private void FlushDeferredStateChanges(IExecutionContainer container, List<DeferredStateChange> changes, ref int updated, ref int failed)
+        /// <remarks>
+        /// The deferred pass revisits records the main pass has already counted, so it keeps its
+        /// own counters and reports them on their own line. Folding them into the block totals
+        /// counted every deferred record twice.
+        /// </remarks>
+        private void FlushDeferredStateChanges(IExecutionContainer container, List<DeferredStateChange> changes)
         {
+            var notWritten = DropChangesForUnwrittenRecords(container, changes, c => c.ActualId, "state");
             if (changes.Count == 0)
             {
                 return;
@@ -1233,6 +1239,8 @@
 
             container.Log($"Applying {changes.Count} deferred state changes");
 
+            var applied = 0;
+            var failed = 0;
             var byEntity = changes.GroupBy(c => c.EntityLogicalName);
 
             foreach (var group in byEntity)
@@ -1242,38 +1250,53 @@
 
                 if (entityName == "duplicaterule" || entityName == "savedquery")
                 {
-                    ApplyStatesIndividually(container, batch, ref updated, ref failed);
+                    ApplyStatesIndividually(container, batch, ref applied, ref failed);
                     continue;
                 }
 
                 if (IsUpdateMultipleSupported(container, entityName))
                 {
-                    if (TryApplyStatesWithUpdateMultiple(container, entityName, batch, ref updated, ref failed))
+                    if (TryApplyStatesWithUpdateMultiple(container, entityName, batch, ref applied, ref failed))
                     {
                         continue;
                     }
                 }
 
-                ApplyStatesIndividually(container, batch, ref updated, ref failed);
+                ApplyStatesIndividually(container, batch, ref applied, ref failed);
             }
+
+            SendLine(container, "Deferred state changes: {0} applied, {1} failed, {2} skipped", applied, failed, notWritten);
+        }
+
+        /// <summary>
+        /// Removes deferred changes whose record never got an id, and says how many were dropped.
+        /// </summary>
+        /// <remarks>
+        /// A change is still at <see cref="Guid.Empty"/> when the main pass did not write its
+        /// record - no match under UpdateOnly, an ambiguous match, or nothing created. That is a
+        /// normal outcome the main pass has already reported, so there is nothing to apply here
+        /// and nothing to count as a failure.
+        /// </remarks>
+        private int DropChangesForUnwrittenRecords<T>(IExecutionContainer container, List<T> changes, Func<T, Guid> actualId, string kind)
+        {
+            var dropped = changes.RemoveAll(c => actualId(c) == Guid.Empty);
+            if (dropped > 0)
+            {
+                container.Log($"Skipping {dropped} deferred {kind} change(s) for records that were not written");
+            }
+
+            return dropped;
         }
 
         /// <summary>
         /// Attempts to apply state changes using UpdateMultiple.
         /// </summary>
-        private bool TryApplyStatesWithUpdateMultiple(IExecutionContainer container, string entityName, List<DeferredStateChange> batch, ref int updated, ref int failed)
+        private bool TryApplyStatesWithUpdateMultiple(IExecutionContainer container, string entityName, List<DeferredStateChange> batch, ref int applied, ref int failed)
         {
             var targets = new EntityCollection { EntityName = entityName };
 
             foreach (var change in batch)
             {
-                if (change.ActualId == Guid.Empty)
-                {
-                    container.Log($"WARNING: Skipping deferred state change for {change.Identifier} - ActualId not set");
-                    failed++;
-                    continue;
-                }
-
                 var entity = new Entity(entityName, change.ActualId);
                 entity["statecode"] = change.StateCode;
                 entity["statuscode"] = change.StatusCode;
@@ -1292,7 +1315,7 @@
                     Parameters = { ["Targets"] = targets }
                 };
                 container.Service.Execute(request);
-                updated += targets.Entities.Count;
+                applied += targets.Entities.Count;
                 container.Log($"Applied {targets.Entities.Count} state changes via UpdateMultiple for {entityName}");
                 return true;
             }
@@ -1310,25 +1333,13 @@
         /// <summary>
         /// Applies state changes individually using SetState.
         /// </summary>
-        private void ApplyStatesIndividually(IExecutionContainer container, List<DeferredStateChange> batch, ref int updated, ref int failed)
+        private void ApplyStatesIndividually(IExecutionContainer container, List<DeferredStateChange> batch, ref int applied, ref int failed)
         {
             for (var i = 0; i < batch.Count; i++)
             {
                 var change = batch[i];
                 try
                 {
-                    if (change.ActualId == Guid.Empty)
-                    {
-                        failed++;
-                        SendLine(container, "{0:000} SetState Failed (deferred): {1} - ActualId not set", change.Position, change.Identifier);
-                        if (stoponerror)
-                        {
-                            container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
-                            throw new InvalidOperationException($"ActualId not set for deferred state change on {change.Identifier}");
-                        }
-                        continue;
-                    }
-
                     var entity = new Entity(change.EntityLogicalName, change.ActualId);
 
                     if (change.EntityLogicalName == "savedquery" && change.StateCode.Value == 1 && change.StatusCode.Value == 1)
@@ -1351,7 +1362,7 @@
                         container.SetState(entity, change.StateCode.Value, change.StatusCode.Value);
                     }
 
-                    updated++;
+                    applied++;
                     SendLine(container, "{0:000} SetState (deferred): {1}: {2}/{3}", change.Position, change.Identifier, change.StateCode.Value, change.StatusCode.Value);
                 }
                 catch (Exception ex)
@@ -1370,8 +1381,10 @@
         /// <summary>
         /// Applies deferred owner changes in bulk when possible.
         /// </summary>
-        private void FlushDeferredOwnerChanges(IExecutionContainer container, List<DeferredOwnerChange> changes, ref int updated, ref int failed)
+        /// <remarks>See <see cref="FlushDeferredStateChanges"/> for why this keeps its own counters.</remarks>
+        private void FlushDeferredOwnerChanges(IExecutionContainer container, List<DeferredOwnerChange> changes)
         {
+            var notWritten = DropChangesForUnwrittenRecords(container, changes, c => c.ActualId, "owner");
             if (changes.Count == 0)
             {
                 return;
@@ -1379,26 +1392,17 @@
 
             container.Log($"Applying {changes.Count} deferred owner changes");
 
+            var applied = 0;
+            var failed = 0;
+
             for (var i = 0; i < changes.Count; i++)
             {
                 var change = changes[i];
                 try
                 {
-                    if (change.ActualId == Guid.Empty)
-                    {
-                        failed++;
-                        SendLine(container, "{0:000} Assign Failed (deferred): {1} - ActualId not set", change.Position, change.Identifier);
-                        if (stoponerror)
-                        {
-                            container.Log($"StopOnError: aborting, {changes.Count - i - 1} record(s) in this batch were not executed");
-                            throw new InvalidOperationException($"ActualId not set for deferred owner change on {change.Identifier}");
-                        }
-                        continue;
-                    }
-
                     var entity = new Entity(change.EntityLogicalName, change.ActualId);
                     container.Principal(entity).On(change.Owner).Assign();
-                    updated++;
+                    applied++;
                     SendLine(container, "{0:000} Assigned (deferred): {1} to {2} {3}", change.Position, change.Identifier, change.Owner.LogicalName, string.IsNullOrEmpty(change.Owner.Name) ? change.Owner.Id.ToString() : change.Owner.Name);
                 }
                 catch (Exception ex)
@@ -1412,6 +1416,8 @@
                     }
                 }
             }
+
+            SendLine(container, "Deferred owner changes: {0} applied, {1} failed, {2} skipped", applied, failed, notWritten);
         }
 
         /// <summary>
