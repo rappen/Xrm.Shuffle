@@ -19,7 +19,7 @@
 		</description>
 		<summary>Deploy solutions and datas with the Shuffle. Empower yourself to achieve more.</summary>
 		<releaseNotes>
-- ExecuteMultipleRequest batching for import operations (configurable BatchSize, default 100)
+- Opt-in batching for import operations: set BatchSize above 1 to enable it (default 1, no batching)
 - New Import option DeferStateAndOwner: statecode/statuscode/ownerid are applied in a second pass so the records themselves stay batchable
 - Batching now also engages for blocks that use Match, except where a live match query has to see the pending records first
 - Failed rows in a batch are reported and no longer counted as successes
