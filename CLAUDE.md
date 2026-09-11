@@ -13,7 +13,24 @@ nuget restore Rappen.XTB.Shuffle.sln
 msbuild Rappen.XTB.Shuffle.sln /p:Configuration=Release /p:Platform="Any CPU" /m
 ```
 
-Output goes to `XTB\bin\Release\`. There are no automated tests — validation is manual/integration only.
+Output goes to `XTB\bin\Release\`.
+
+Unit tests live in `tests\Xrm.Shuffle.Core.Tests\`. That project imports the same two
+`.projitems` as the XTB project, so it compiles the shuffle core without WinForms or
+XrmToolBox. Build the **solution** rather than the csproj (the project platform is
+`AnyCPU` and the sln does the `Any CPU` mapping), then run the tests with the VSTest
+console:
+
+```bash
+vstest.console.exe "tests\Xrm.Shuffle.Core.Tests\bin\Release\Xrm.Shuffle.Core.Tests.dll" /Framework:.NETFramework,Version=v4.8
+```
+
+NUnit3TestAdapter arrives through `PackageReference` and is auto-imported, so no
+`/TestAdapterPath` is needed. `.github/workflows/build.yml` runs the same command and
+fails the build on a red test.
+
+Everything outside that project - solution import and export, data export, and anything
+that needs a live org - is still validated manually.
 
 To produce NuGet packages:
 ```bash
