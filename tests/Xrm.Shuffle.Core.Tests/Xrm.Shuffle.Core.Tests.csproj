@@ -81,6 +81,7 @@
     <Compile Include="Layer2\MatchResolutionTests.cs" />
     <Compile Include="Layer2\SkipIdenticalTests.cs" />
     <Compile Include="Layer2\UpsertGateTests.cs" />
+    <Compile Include="Layer3\DeferStateAndOwnerTests.cs" />
     <Compile Include="SmokeTests.cs" />
     <Compile Include="TestDoubleTests.cs" />
   </ItemGroup>
