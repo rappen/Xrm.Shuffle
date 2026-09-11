@@ -222,6 +222,13 @@ namespace Cinteros.Crm.Utils.Shuffle
                 owner.FlushPendingUpserts(owner.container, Items, ref outcome.Created, ref outcome.Updated, ref outcome.Failed, outcome.References);
                 return outcome;
             }
+
+            internal BatchOutcome FlushAsCreateUpdate(Shuffler owner)
+            {
+                var outcome = new BatchOutcome();
+                owner.FlushUpsertsAsCreateUpdate(owner.container, Items, ref outcome.Created, ref outcome.Updated, ref outcome.Failed, outcome.References);
+                return outcome;
+            }
         }
 
         /// <summary>Runs the create dispatcher over <paramref name="batch"/>.</summary>
@@ -240,6 +247,12 @@ namespace Cinteros.Crm.Utils.Shuffle
         public BatchOutcome TestFlushPendingUpserts(TestUpsertBatch batch)
         {
             return batch.FlushDispatcher(this);
+        }
+
+        /// <summary>Calls the lowest upsert rung directly: create, then update on a duplicate.</summary>
+        public BatchOutcome TestFlushUpsertsAsCreateUpdate(TestUpsertBatch batch)
+        {
+            return batch.FlushAsCreateUpdate(this);
         }
 
         /// <summary>Runs the delete dispatcher over <paramref name="batch"/>.</summary>

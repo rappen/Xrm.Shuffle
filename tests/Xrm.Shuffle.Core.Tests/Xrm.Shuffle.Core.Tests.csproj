@@ -84,6 +84,8 @@
     <Compile Include="Layer3\DeferStateAndOwnerTests.cs" />
     <Compile Include="Layer3\GuidRemappingTests.cs" />
     <Compile Include="Layer3\PendingCreateReferenceTests.cs" />
+    <Compile Include="Regressions\BatchErrorReportingTests.cs" />
+    <Compile Include="Regressions\LogMessageTests.cs" />
     <Compile Include="SmokeTests.cs" />
     <Compile Include="TestDoubleTests.cs" />
   </ItemGroup>
