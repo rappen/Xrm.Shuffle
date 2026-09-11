@@ -59,7 +59,18 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Helpers\DataXml.cs" />
+    <Compile Include="Helpers\DefinitionXml.cs" />
+    <Compile Include="Helpers\ExecuteMultipleResponseBuilder.cs" />
+    <Compile Include="Helpers\RecordingLogger.cs" />
+    <Compile Include="Helpers\ScriptedOrganizationService.cs" />
+    <Compile Include="Helpers\SharedStaticCaches.cs" />
+    <Compile Include="Helpers\ShuffleEventRecorder.cs" />
+    <Compile Include="Helpers\ShuffleTestBase.cs" />
+    <Compile Include="Helpers\ShufflerTestShim.cs" />
+    <Compile Include="Helpers\TestExecutionContainer.cs" />
     <Compile Include="SmokeTests.cs" />
+    <Compile Include="TestDoubleTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
