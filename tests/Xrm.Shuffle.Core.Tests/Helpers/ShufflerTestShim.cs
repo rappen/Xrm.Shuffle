@@ -302,6 +302,16 @@ namespace Cinteros.Crm.Utils.Shuffle
         public static bool TestReferencesPendingCreate(Entity entity, TestCreateBatch pending) =>
             pending.References(entity);
 
+        /// <summary>Rewrites every lookup on a record through the guid map, in place.</summary>
+        public void TestReplaceGuids(Entity entity, bool includeId = false) =>
+            ReplaceGuids(container, entity, includeId);
+
+        /// <summary>Adds a pair to the guid map, subject to the same conditions the import applies.</summary>
+        public void TestMapGuid(Guid oldId, Guid newId) => MapGuid(oldId, newId);
+
+        /// <summary>Maps a created id and fills any deferred change waiting on that record.</summary>
+        public void TestRecordCreatedId(Guid oldId, Guid newId) => RecordCreatedId(oldId, newId);
+
         /// <summary>Records a batch error and reports whether the import should stop.</summary>
         public bool TestStopOnBatchError(int position, string identifier) =>
             StopOnBatchError(position, identifier);
