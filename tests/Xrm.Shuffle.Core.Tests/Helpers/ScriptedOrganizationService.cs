@@ -1,4 +1,4 @@
-namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
+﻿namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
 {
     using System;
     using System.Collections.Generic;
@@ -40,6 +40,9 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
         private readonly Dictionary<string, HashSet<string>> supportedBulkMessages =
             new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
+        private readonly List<Tuple<string, string>> probes = new List<Tuple<string, string>>();
+
+        private Exception probeFailure;
         private Func<Entity, Guid> onCreate;
         private Action<Entity> onUpdate;
         private Func<QueryBase, EntityCollection> onRetrieveMultiple;
@@ -55,6 +58,13 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
 
         /// <summary>Records passed to the individual <see cref="Delete"/> path.</summary>
         public IReadOnlyList<Tuple<string, Guid>> Deleted => deleted;
+
+        /// <summary>
+        /// Every sdkmessagefilter capability probe, as (entity, message). RetrieveMultiple does
+        /// not go through Requests, and the probe is cached per entity and message, so this is
+        /// what a fixture counts to show the cache is doing its job.
+        /// </summary>
+        public IReadOnlyList<Tuple<string, string>> Probes => probes;
 
         /// <summary>The request names seen, in order - the routing assertion most fixtures make.</summary>
         public IReadOnlyList<string> RequestNames => requests.Select(r => r.RequestName).ToList();
@@ -147,6 +157,16 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
             return this;
         }
 
+        /// <summary>
+        /// Makes the capability probe throw. The product catches that and caches a no, which
+        /// is the difference between an org that cannot answer and one that answers no.
+        /// </summary>
+        public ScriptedOrganizationService FailTheCapabilityProbe(Exception exception)
+        {
+            probeFailure = exception;
+            return this;
+        }
+
         /// <summary>Assigns ids to individual creates. Defaults to a fresh guid each time.</summary>
         public ScriptedOrganizationService OnCreate(Func<Entity, Guid> handler)
         {
@@ -236,6 +256,12 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
             var probe = AsBulkCapabilityProbe(query);
             if (probe != null)
             {
+                probes.Add(probe);
+                if (probeFailure != null)
+                {
+                    throw probeFailure;
+                }
+
                 HashSet<string> supported;
                 var yes = supportedBulkMessages.TryGetValue(probe.Item1, out supported)
                           && supported.Contains(probe.Item2);

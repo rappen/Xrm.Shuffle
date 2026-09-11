@@ -116,7 +116,12 @@ namespace Cinteros.Crm.Utils.Shuffle
             /// <summary>How many records are queued.</summary>
             public int Count => Items.Count;
 
-            /// <summary>The entities queued, in order.</summary>
+            /// <summary>
+            /// The entities queued, in order. Read this <em>before</em> flushing: every
+            /// dispatcher clears its batch once it has flushed, so afterwards this is empty.
+            /// The list is a snapshot but the entities in it are the live objects, which is
+            /// what makes it useful for asserting ids written back by a bulk message.
+            /// </summary>
             public IReadOnlyList<Entity> Entities => Items.Select(i => i.Entity).ToList();
             /// <remarks>
             /// The flush calls live here rather than on the outer class: a containing type cannot
