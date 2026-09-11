@@ -63,6 +63,7 @@
     <Compile Include="Helpers\DefinitionXml.cs" />
     <Compile Include="Helpers\ExecuteMultipleResponseBuilder.cs" />
     <Compile Include="Helpers\FakeOrgTestBase.cs" />
+    <Compile Include="Helpers\FetchXmlConversion.cs" />
     <Compile Include="Helpers\RecordingLogger.cs" />
     <Compile Include="Helpers\RecordingOrganizationService.cs" />
     <Compile Include="Helpers\ScriptedOrganizationService.cs" />

@@ -231,6 +231,11 @@
 
         public OrganizationResponse Execute(OrganizationRequest request)
         {
+            if (FetchXmlConversion.IsConversion(request))
+            {
+                return FetchXmlConversion.Answer(request);
+            }
+
             requests.Add(request);
 
             Queue<Exception> pending;
