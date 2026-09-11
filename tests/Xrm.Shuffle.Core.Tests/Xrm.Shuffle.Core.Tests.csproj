@@ -69,6 +69,8 @@
     <Compile Include="Helpers\ShuffleTestBase.cs" />
     <Compile Include="Helpers\ShufflerTestShim.cs" />
     <Compile Include="Helpers\TestExecutionContainer.cs" />
+    <Compile Include="Layer1\BatchResponsePairingTests.cs" />
+    <Compile Include="Layer1\UpdateAndDeletePairingTests.cs" />
     <Compile Include="SmokeTests.cs" />
     <Compile Include="TestDoubleTests.cs" />
   </ItemGroup>
