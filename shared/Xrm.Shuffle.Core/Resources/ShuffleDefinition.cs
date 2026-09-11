@@ -92,9 +92,9 @@ namespace Cinteros.Crm.Utils.Shuffle.Types {
         [System.Xml.Serialization.XmlIgnoreAttribute()]
         public bool OverwriteSpecified;
 
-        /// <summary>Number of records per CreateMultiple/UpdateMultiple batch. Set to 1 to disable batching. Max 1000. Microsoft recommends ~100 for standard tables.</summary>
+        /// <summary>Number of records per CreateMultiple/UpdateMultiple batch. Batching is off by default; set this above 1 to enable it. Max 1000. Microsoft recommends ~100 for standard tables.</summary>
         [System.Xml.Serialization.XmlAttributeAttribute()]
-        [System.ComponentModel.DefaultValueAttribute(100)]
+        [System.ComponentModel.DefaultValueAttribute(1)]
         public int BatchSize;
 
         /// <summary>Strip statecode/statuscode/ownerid from records during import and apply them in a second pass using bulk operations. Significantly improves performance for datasets with state/owner attributes. Default: false.</summary>
@@ -108,7 +108,7 @@ namespace Cinteros.Crm.Utils.Shuffle.Types {
             this.Delete = DeleteTypes.None;
             this.UpdateInactive = false;
             this.UpdateIdentical = false;
-            this.BatchSize = 100;
+            this.BatchSize = 1;
             this.DeferStateAndOwner = false;
         }
     }

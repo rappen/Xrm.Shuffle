@@ -206,8 +206,8 @@ namespace Rappen.XTB.Shuffle.Builder.Controls
             this.txtBatchSize.Name = "txtBatchSize";
             this.txtBatchSize.Size = new System.Drawing.Size(80, 20);
             this.txtBatchSize.TabIndex = 22;
-            this.txtBatchSize.Tag = "BatchSize|false|100";
-            this.tooltips.SetToolTip(this.txtBatchSize, "Number of records sent to the server per bulk request. Default 100.");
+            this.txtBatchSize.Tag = "BatchSize|false|1";
+            this.tooltips.SetToolTip(this.txtBatchSize, "Number of records sent to the server per bulk request. Batching is off by default (1). Set above 1 to enable it - note that CreateMultiple and UpdateMultiple are transactional, so one bad record fails the whole batch. Max 1000.");
             //
             // label9
             //
