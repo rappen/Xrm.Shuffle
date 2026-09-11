@@ -263,9 +263,9 @@
         <xs:documentation>DEPRECATED. Use Save attribute instead.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="BatchSize" type="xs:int" use="optional" default="100">
+    <xs:attribute name="BatchSize" type="xs:int" use="optional" default="1">
       <xs:annotation>
-        <xs:documentation>Number of records per ExecuteMultipleRequest batch. Set to 1 to disable batching. Max 1000.</xs:documentation>
+        <xs:documentation>Number of records per CreateMultiple/UpdateMultiple batch, falling back to ExecuteMultipleRequest. Batching is off by default; set this above 1 to enable it. Max 1000.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="DeferStateAndOwner" type="xs:boolean" use="optional" default="false">

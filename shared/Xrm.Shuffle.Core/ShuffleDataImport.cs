@@ -901,8 +901,6 @@
 
         #region Batch Helpers
 
-        private const int DefaultBatchSize = 100;
-
         private struct PendingCreate
         {
             public Entity Entity;
