@@ -62,17 +62,25 @@
     <Compile Include="Helpers\DataXml.cs" />
     <Compile Include="Helpers\DefinitionXml.cs" />
     <Compile Include="Helpers\ExecuteMultipleResponseBuilder.cs" />
+    <Compile Include="Helpers\FakeOrgTestBase.cs" />
     <Compile Include="Helpers\RecordingLogger.cs" />
+    <Compile Include="Helpers\RecordingOrganizationService.cs" />
     <Compile Include="Helpers\ScriptedOrganizationService.cs" />
     <Compile Include="Helpers\SharedStaticCaches.cs" />
     <Compile Include="Helpers\ShuffleEventRecorder.cs" />
     <Compile Include="Helpers\ShuffleTestBase.cs" />
+    <Compile Include="Helpers\ShuffleTestContext.cs" />
     <Compile Include="Helpers\ShufflerTestShim.cs" />
     <Compile Include="Helpers\TestExecutionContainer.cs" />
     <Compile Include="Layer1\BatchResponsePairingTests.cs" />
     <Compile Include="Layer1\BulkMessageFallbackTests.cs" />
     <Compile Include="Layer1\BulkMessageRoutingTests.cs" />
     <Compile Include="Layer1\UpdateAndDeletePairingTests.cs" />
+    <Compile Include="Layer2\BatchabilityTests.cs" />
+    <Compile Include="Layer2\CapabilityDetectionTests.cs" />
+    <Compile Include="Layer2\MatchResolutionTests.cs" />
+    <Compile Include="Layer2\SkipIdenticalTests.cs" />
+    <Compile Include="Layer2\UpsertGateTests.cs" />
     <Compile Include="SmokeTests.cs" />
     <Compile Include="TestDoubleTests.cs" />
   </ItemGroup>

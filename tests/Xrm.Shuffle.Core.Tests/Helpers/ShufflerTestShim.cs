@@ -386,6 +386,49 @@ namespace Cinteros.Crm.Utils.Shuffle
         public void TestFlushDeferredStateChanges() =>
             FlushDeferredStateChanges(container, deferredStates);
 
+        /// <summary>What a whole block import did, by counter.</summary>
+        public class BlockOutcome
+        {
+            public int Created;
+            public int Updated;
+            public int Skipped;
+            public int Deleted;
+            public int Failed;
+            public EntityReferenceCollection References;
+
+            /// <summary>Every record the block accounted for, however it accounted for it.</summary>
+            public int Accounted
+            {
+                get { return Created + Updated + Skipped + Deleted + Failed; }
+            }
+
+            public override string ToString()
+            {
+                return string.Format(
+                    "created {0}, updated {1}, skipped {2}, deleted {3}, failed {4}",
+                    Created, Updated, Skipped, Deleted, Failed);
+            }
+        }
+
+        /// <summary>
+        /// Runs one whole data block, which is the only way to reach the decisions that are
+        /// made before any flush happens - the upsert gate, batchability, match resolution and
+        /// the capability probes.
+        /// </summary>
+        public BlockOutcome TestImportDataBlock(Types.DataBlock block, EntityCollection entities)
+        {
+            var result = ImportDataBlock(container, block, entities);
+            return new BlockOutcome
+            {
+                Created = result.Item1,
+                Updated = result.Item2,
+                Skipped = result.Item3,
+                Deleted = result.Item4,
+                Failed = result.Item5,
+                References = result.Item6
+            };
+        }
+
         /// <summary>Runs the deferred owner pass.</summary>
         public void TestFlushDeferredOwnerChanges() =>
             FlushDeferredOwnerChanges(container, deferredOwners);
