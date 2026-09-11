@@ -65,7 +65,7 @@ Detection uses `sdkmessagefilter` queries. Results are cached per entity name to
 ### Batching
 
 Creates, updates and upserts are accumulated into a pending list and flushed in
-batches of `BatchSize` (default 100). The batch must be flushed early whenever the
+batches of `BatchSize` (default 1, i.e. no batching). The batch must be flushed early whenever the
 next step needs the server to already know about the pending records — before a live
 `Match` query, and before `ReplaceGuids` rewrites a record whose lookups point at a
 record still in the batch. `IsBatchable` decides what may be batched at all; among

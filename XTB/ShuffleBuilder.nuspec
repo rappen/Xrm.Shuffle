@@ -19,7 +19,7 @@
 		</description>
 		<summary>Build schema files for the Shuffle. Empower yourself to achieve more.</summary>
 		<releaseNotes>
-- New Batch size field on Import configuration for ExecuteMultipleRequest batching (default 100)
+- New Batch size field on Import configuration, opting a block in to bulk-message batching (default 1, no batching)
 - New Defer state and owner checkbox on Import configuration, with a tooltip explaining when it helps
 - Multi-Select OptionSet (OptionSetValueCollection) export/import support
 - Deterministic attribute ordering in XML export for clean version control diffs
