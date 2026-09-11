@@ -26,8 +26,13 @@ vstest.console.exe "tests\Xrm.Shuffle.Core.Tests\bin\Release\Xrm.Shuffle.Core.Te
 ```
 
 NUnit3TestAdapter arrives through `PackageReference` and is auto-imported, so no
-`/TestAdapterPath` is needed. `.github/workflows/build.yml` runs the same command and
-fails the build on a red test.
+`/TestAdapterPath` is needed.
+
+Run **both** configurations. `ShuffleDataImport` logs the match query as FetchXml
+inside `#if DEBUG`, which sends a message the test doubles have to answer, so Debug
+exercises calls Release never makes - and Visual Studio Test Explorer defaults to
+Debug. `.github/workflows/build.yml` builds and tests both, and fails the build on a
+red test in either.
 
 Everything outside that project - solution import and export, data export, and anything
 that needs a live org - is still validated manually.

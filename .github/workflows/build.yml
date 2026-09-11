@@ -77,7 +77,7 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build solution
+      - name: Build solution (Release)
         run: msbuild Rappen.XTB.Shuffle.sln /p:Configuration=Release /p:Platform="Any CPU" /m
 
       - name: Locate VSTest
@@ -95,13 +95,30 @@ jobs:
           "PATH=$console" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "Found $console"
 
-      - name: Run tests
+      - name: Run tests (Release)
         shell: pwsh
         run: |
           & "${{ steps.vstest.outputs.PATH }}" `
             "tests\Xrm.Shuffle.Core.Tests\bin\Release\Xrm.Shuffle.Core.Tests.dll" `
             /Framework:.NETFramework,Version=v4.8 `
-            /Logger:"trx;LogFileName=Xrm.Shuffle.Core.Tests.trx" `
+            /Logger:"trx;LogFileName=Xrm.Shuffle.Core.Tests.Release.trx" `
+            /ResultsDirectory:TestResults
+          if ($LASTEXITCODE -ne 0) { throw "Tests failed with exit code $LASTEXITCODE" }
+
+      # The product compiles differently in the two configurations: ShuffleDataImport
+      # logs the match query as FetchXml under #if DEBUG, which sends a message the
+      # test doubles have to answer. Release alone would let that divergence through,
+      # green here and red in Visual Studio, which is what happened once already.
+      - name: Build solution (Debug)
+        run: msbuild Rappen.XTB.Shuffle.sln /p:Configuration=Debug /p:Platform="Any CPU" /m
+
+      - name: Run tests (Debug)
+        shell: pwsh
+        run: |
+          & "${{ steps.vstest.outputs.PATH }}" `
+            "tests\Xrm.Shuffle.Core.Tests\bin\Debug\Xrm.Shuffle.Core.Tests.dll" `
+            /Framework:.NETFramework,Version=v4.8 `
+            /Logger:"trx;LogFileName=Xrm.Shuffle.Core.Tests.Debug.trx" `
             /ResultsDirectory:TestResults
           if ($LASTEXITCODE -ne 0) { throw "Tests failed with exit code $LASTEXITCODE" }
 
