@@ -486,7 +486,6 @@
                 var name = prereq.Name;
                 var comparer = prereq.Comparer;
                 var version = new Version();
-                container.Log("Prereq: {0} {1} {2}", name, comparer, version);
 
                 if (comparer == SolutionVersionComparers.eqthis || comparer == SolutionVersionComparers.gethis)
                 {
@@ -497,6 +496,10 @@
                 {
                     version = new Version(prereq.Version.Replace('*', '0'));
                 }
+
+                // Logged after resolution - comparer and version are both rewritten above,
+                // so logging first reported "ge 0.0" for every prerequisite.
+                container.Log("Prereq: {0} {1} {2}", name, comparer, version);
 
                 foreach (var cdSolution in cSolutions.Entities)
                 {
