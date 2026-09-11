@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -70,6 +70,8 @@
     <Compile Include="Helpers\ShufflerTestShim.cs" />
     <Compile Include="Helpers\TestExecutionContainer.cs" />
     <Compile Include="Layer1\BatchResponsePairingTests.cs" />
+    <Compile Include="Layer1\BulkMessageFallbackTests.cs" />
+    <Compile Include="Layer1\BulkMessageRoutingTests.cs" />
     <Compile Include="Layer1\UpdateAndDeletePairingTests.cs" />
     <Compile Include="SmokeTests.cs" />
     <Compile Include="TestDoubleTests.cs" />
