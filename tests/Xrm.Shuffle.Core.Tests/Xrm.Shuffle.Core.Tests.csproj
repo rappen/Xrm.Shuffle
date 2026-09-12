@@ -67,6 +67,7 @@
     <Compile Include="Layer1\UpdateAndDeletePairingTests.cs" />
     <Compile Include="Layer2\BatchabilityTests.cs" />
     <Compile Include="Layer2\CapabilityDetectionTests.cs" />
+    <Compile Include="Layer2\ExportAttributeSelectionTests.cs" />
     <Compile Include="Layer2\MatchResolutionTests.cs" />
     <Compile Include="Layer2\SkipIdenticalTests.cs" />
     <Compile Include="Layer2\UpsertGateTests.cs" />
@@ -75,6 +76,7 @@
     <Compile Include="Layer3\PendingCreateReferenceTests.cs" />
     <Compile Include="Regressions\BatchErrorReportingTests.cs" />
     <Compile Include="Regressions\LogMessageTests.cs" />
+    <Compile Include="Regressions\SendTextFormattingTests.cs" />
     <Compile Include="SmokeTests.cs" />
     <Compile Include="TestDoubleTests.cs" />
   </ItemGroup>
