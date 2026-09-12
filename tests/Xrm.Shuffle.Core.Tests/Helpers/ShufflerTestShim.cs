@@ -455,5 +455,22 @@ namespace Cinteros.Crm.Utils.Shuffle
         /// <summary>Runs the deferred owner pass.</summary>
         public void TestFlushDeferredOwnerChanges() =>
             FlushDeferredOwnerChanges(container, deferredOwners);
+
+        /// <summary>
+        /// Runs the export attribute filter over a collection of exported records.
+        /// </summary>
+        /// <remarks>
+        /// Static, and takes its own container, because SelectAttributes is static on the
+        /// product side too - it needs no shuffler state, only metadata for the primary id.
+        /// </remarks>
+        public static void TestSelectAttributes(IExecutionContainer container, EntityCollection entities, List<string> attributes, List<string> nullAttributes) =>
+            SelectAttributes(container, entities, attributes, nullAttributes);
+
+        /// <summary>Sends one line through the product formatting path.</summary>
+        public void TestSendLine(string msg, params object[] args) =>
+            SendLine(container, msg, args);
+
+        /// <summary>Sends a bare newline - the case the length guard in SendText drops.</summary>
+        public void TestSendBlankLine() => SendLine(container);
     }
 }
