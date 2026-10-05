@@ -19,16 +19,6 @@
     {
         #region Private Methods
 
-        private static string GetOptionSetLabel(Entity entity, string attribute)
-        {
-            if (entity.FormattedValues.Contains(attribute) && !string.IsNullOrEmpty(entity.FormattedValues[attribute]))
-            {
-                return entity.FormattedValues[attribute];
-            }
-            var value = entity.GetAttribute<OptionSetValue>(attribute, null);
-            return value != null ? value.Value.ToString() : string.Empty;
-        }
-
         private static string ExtractErrorMessage(string message)
         {
             const string fault = "(Fault Detail is equal to Microsoft.Xrm.Sdk.OrganizationServiceFault).: ";
@@ -173,7 +163,7 @@
                 }
                 if (cdAsyncOperation != null)
                 {
-                    statustext = GetOptionSetLabel(cdAsyncOperation, SystemJob.StatusReason);
+                    statustext = cdAsyncOperation.AttributeAsString(SystemJob.StatusReason, string.Empty, true);
                     var newStatus = cdAsyncOperation.GetAttribute(SystemJob.StatusReason, new OptionSetValue()).Value;
                     if (newStatus != importStatus)
                     {
@@ -217,7 +207,7 @@
                                     SendLine(container, "See log file for technical details.");
                                 }
                             }
-                            ex = new Exception($"Solution Import Failed: {GetOptionSetLabel(cdAsyncOperation, SystemJob.Status)} - {GetOptionSetLabel(cdAsyncOperation, SystemJob.StatusReason)}");
+                            ex = new Exception($"Solution Import Failed: {cdAsyncOperation.AttributeAsString(SystemJob.Status, string.Empty, true)} - {cdAsyncOperation.AttributeAsString(SystemJob.StatusReason, string.Empty, true)}");
 
                             break;
                         }
