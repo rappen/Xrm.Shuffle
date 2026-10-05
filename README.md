@@ -153,7 +153,7 @@ Choose one of two query modes:
 
 > **Performance tip:** Shuffle automatically uses **CreateMultiple/UpdateMultiple/UpsertMultiple** bulk operations on Dataverse (online) for maximum throughput, falling back to **ExecuteMultipleRequest** for on-premises CRM 9.1 compatibility, and further falling back to individual operations for CRM 8.x and older. `BatchSize` controls how many records are grouped per API call, and it defaults to `1` — nothing is batched until a definition asks for it. Set it to ~100 to opt in, which is Microsoft's recommendation for standard tables; larger values (up to 1000) may improve throughput for simple operations. Note that `CreateMultiple` and `UpdateMultiple` are a single transaction, so one bad record fails the whole batch, where an unbatched import would have failed only that record. For records with complex plug-ins, keep the value low or leave batching off.
 
-> **UpsertMultiple optimization:** When importing with `Save="CreateUpdate"`, `CreateWithId="true"`, `UpdateIdentical="true"` and match attributes defined, Shuffle automatically uses **UpsertMultiple** on Dataverse, eliminating the `PreRetrieveAll` queries by letting Dataverse decide whether to create or update each record. No configuration required beyond those attributes — the system detects when Upsert is applicable and uses it automatically.
+> **UpsertMultiple optimization:** When a block sets `BatchSize` above `1`, imports with `Save="CreateUpdate"`, `CreateWithId="true"` and `UpdateIdentical="true"`, and matches on the primary key alone, Shuffle uses **UpsertMultiple** on Dataverse, eliminating the `PreRetrieveAll` queries by letting Dataverse decide whether to create or update each record. Upsert finds records by primary key only, so a block that matches on anything else keeps the Match-based path.
 
 > **DeferStateAndOwner optimization:** Records carrying `statecode`, `statuscode` or `ownerid` are excluded from batching, so without this option a block full of inactive or reassigned records is imported one row at a time. With `DeferStateAndOwner="true"` those attributes are stripped before the record is saved, the record goes through the normal batched path, and the state and owner changes are applied afterwards in a second pass. The end state of each record is the same. How much this gains depends on what share of the block carries those attributes — a block where none do gains nothing. Use it when migrating between environments where preserving state and ownership matters.
 
@@ -164,9 +164,10 @@ Choose one of two query modes:
 Shuffle automatically selects the optimal import strategy based on your configuration. Understanding when each path is used helps you configure imports for best performance.
 
 **Upsert Path** (fastest, Dataverse only) — Used when ALL of these conditions are met:
+- `BatchSize` above `1` — like the rest of the bulk machinery, Upsert is opt-in
 - `Save="CreateUpdate"` — records may be created or updated
 - `CreateWithId="true"` — records include their primary key
-- `<Match>` has one or more attributes defined
+- `<Match>` has exactly one attribute, the primary key (e.g. `accountid`) — Upsert finds the target record by primary key and nothing else, so a Match on any other attribute (a name, say) has to stay on the Match-based path, or a record that exists under a different id would be created a second time
 - `Delete="None"` (or not specified) — no deletion of existing records
 - `UpdateIdentical="true"` — Upsert never retrieves the existing record, so it cannot tell an identical row from a changed one and always writes. Without this flag the block has asked for identical records to be skipped, which Upsert cannot honour, so the Match-based path is used instead.
 
@@ -177,6 +178,9 @@ When the Upsert path is active:
 - ⚠️ Falls back gracefully on CRM 9.1 on-premises (ExecuteMultiple + Upsert) or CRM 8.x (individual Create/Update)
 
 **Match-based Path** (traditional) — Used when ANY of these conditions apply:
+- `BatchSize` is `1` (the default) — no batching was asked for
+- `<Match>` uses anything other than the primary key alone
+- `UpdateIdentical="false"` (the default) — identical records must be detected and skipped
 - `Save="CreateOnly"` or `Save="UpdateOnly"` — one-directional operations
 - `CreateWithId="false"` — records don't include their primary key
 - `Delete="Existing"` or `Delete="All"` — deletion requires knowing which records exist
@@ -189,7 +193,9 @@ When the Match-based path is active:
 
 | Configuration | Import Path | PreRetrieveAll Effect |
 |---------------|-------------|----------------------|
-| `Save="CreateUpdate"` + `CreateWithId="true"` + Match defined + `Delete="None"` + `UpdateIdentical="true"` | Upsert | Bypassed (not needed) |
+| `BatchSize` > 1 + `Save="CreateUpdate"` + `CreateWithId="true"` + Match on the primary key only + `Delete="None"` + `UpdateIdentical="true"` | Upsert | Bypassed (not needed) |
+| `BatchSize="1"` (the default) | Match-based | Active |
+| Match on anything but the primary key alone | Match-based | Active |
 | `Save="CreateUpdate"` + `CreateWithId="false"` | Match-based | Active |
 | `UpdateIdentical="false"` (the default) | Match-based | Active |
 | `Save="CreateOnly"` (any other flags) | Match-based | Active |

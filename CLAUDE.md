@@ -77,7 +77,7 @@ The XML schema is `Resources/ShuffleDefinition.xsd`; the corresponding C# class 
 
 `ShuffleDataImport.cs` detects what the connected environment supports **at runtime per entity** (cached) and walks down this chain:
 
-1. **UpsertMultiple** (Dataverse online, fastest — bypasses PreRetrieveAll entirely when `UpdateIdentical=true`)
+1. **UpsertMultiple** (Dataverse online, fastest — bypasses PreRetrieveAll entirely). Only for blocks with `BatchSize` > 1, `Save=CreateUpdate`, `CreateWithId`, `UpdateIdentical=true`, no Delete, and a Match on the primary key alone: Upsert finds records by id only, so any other Match must keep the Match-based path or it creates duplicates.
 2. **CreateMultiple / UpdateMultiple** (Dataverse online)
 3. **ExecuteMultipleRequest** (CRM 9.1 on-premises fallback)
 4. **Individual operations** (CRM 8.x fallback)

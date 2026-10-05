@@ -349,13 +349,20 @@
                 }
 
                 // Determine if we can use Upsert path (eliminates need for PreRetrieveAll queries)
-                // Upsert is optimal when: Save=CreateUpdate, records have ID (CreateWithId), records are batchable,
-                // AND UpdateIdentical=true (because Upsert cannot skip identical records - we don't retrieve existing data to compare)
-                var canUseUpsert = save == SaveTypes.CreateUpdate && 
-                                   includeid && 
-                                   matchattributes.Count > 0 &&
+                // Upsert finds the target record by its primary key and nothing else, so it can only
+                // stand in for a Match on that key alone - matching on anything else (a name, say)
+                // would create a second record wherever the ids differ. It also needs records with
+                // their ID (CreateWithId) and UpdateIdentical=true, because Upsert cannot skip
+                // identical records - we don't retrieve existing data to compare. Like the rest of
+                // the bulk machinery it is opt-in through BatchSize, so an existing definition keeps
+                // the Match-based path it was written against.
+                var canUseUpsert = batchsize > 1 &&
+                                   save == SaveTypes.CreateUpdate &&
+                                   includeid &&
                                    delete == DeleteTypes.None &&
-                                   updateidentical;
+                                   updateidentical &&
+                                   matchattributes.Count == 1 &&
+                                   matchattributes[0] == container.Entity(block.Entity).PrimaryIdAttribute;
 
                 if (canUseUpsert)
                 {
@@ -1975,24 +1982,9 @@
                 }
             }
 
-            // Fallback to Create (since we don't have a match for single upsert fallback)
-            try
-            {
-                container.Create(item.Entity);
-                created++;
-                SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
-                references.Add(item.Entity.ToEntityReference());
-                MapGuid(item.OldId, item.Entity.Id);
-            }
-            catch (Exception ex)
-            {
-                failed++;
-                SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
-                if (StopOnBatchError(item.Position, item.Identifier))
-                {
-                    throw;
-                }
-            }
+            // Same fallback as a batch: Create, and Update if the record already exists. Create
+            // alone would fail every record that is already in the target.
+            FlushUpsertsAsCreateUpdate(container, new List<PendingUpsert> { item }, ref created, ref updated, ref failed, references);
         }
 
         /// <summary>
