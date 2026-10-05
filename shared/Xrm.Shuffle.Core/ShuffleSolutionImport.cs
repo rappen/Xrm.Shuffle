@@ -163,8 +163,7 @@
                 }
                 if (cdAsyncOperation != null)
                 {
-                    container.Attribute(SystemJob.StatusReason).On(cdAsyncOperation).ToString();
-                    statustext = container.Attribute(SystemJob.StatusReason).On(cdAsyncOperation).ToString();
+                    statustext = cdAsyncOperation.AttributeAsString(SystemJob.StatusReason, string.Empty, true);
                     var newStatus = cdAsyncOperation.GetAttribute(SystemJob.StatusReason, new OptionSetValue()).Value;
                     if (newStatus != importStatus)
                     {
@@ -208,9 +207,7 @@
                                     SendLine(container, "See log file for technical details.");
                                 }
                             }
-                            container.Attribute(SystemJob.Status).On(cdAsyncOperation).ToString();
-
-                            ex = new Exception($"Solution Import Failed: {container.Attribute(SystemJob.Status).On(cdAsyncOperation).ToString()} - {container.Attribute(SystemJob.StatusReason).On(cdAsyncOperation).ToString()}");
+                            ex = new Exception($"Solution Import Failed: {cdAsyncOperation.AttributeAsString(SystemJob.Status, string.Empty, true)} - {cdAsyncOperation.AttributeAsString(SystemJob.StatusReason, string.Empty, true)}");
 
                             break;
                         }

@@ -42,7 +42,7 @@
             return match;
         }
 
-        private static string GetEntityDisplayString(IExecutionContainer container, DataBlockImportMatch match, Entity cdEntity)
+        private static string GetEntityDisplayString(DataBlockImportMatch match, Entity cdEntity)
         {
             var unique = new List<string>();
             if (match != null && match.Attribute.Length > 0)
@@ -54,27 +54,7 @@
                     {
                         matchdisplay = attribute.Name;
                     }
-                    var matchvalue = "<null>";
-                    if (cdEntity.Contains(matchdisplay, true))
-                    {
-                        if (cdEntity[matchdisplay] is EntityReference)
-                        {   // Don't use PropertyAsString, that would perform GetRelated that we don't want due to performance
-                            var entref = cdEntity.GetAttribute<EntityReference>(matchdisplay, null);
-                            if (!string.IsNullOrEmpty(entref.Name))
-                            {
-                                matchvalue = entref.Name;
-                            }
-                            else
-                            {
-                                matchvalue = entref.LogicalName + ":" + entref.Id.ToString();
-                            }
-                        }
-                        else
-                        {
-                            matchvalue = container.Attribute(matchdisplay).On(cdEntity).ToString();
-                        }
-                    }
-                    unique.Add(matchvalue);
+                    unique.Add(cdEntity.AttributeAsString(matchdisplay, "<null>", true));
                 }
             }
             if (unique.Count == 0)
@@ -337,7 +317,7 @@
 
                         ReplaceGuids(container, cdEntity, includeid);
                         ReplaceUpdateInfo(cdEntity);
-                        unique = GetEntityDisplayString(container, block.Import.Match, cdEntity);
+                        unique = GetEntityDisplayString(block.Import.Match, cdEntity);
                         SendStatus(null, unique);
 
                         if (!block.TypeSpecified || block.Type == EntityTypes.Entity)
