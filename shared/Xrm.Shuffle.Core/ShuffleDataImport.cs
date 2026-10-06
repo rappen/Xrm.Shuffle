@@ -80,23 +80,43 @@
             var match = true;
             foreach (var attr in matchattributes)
             {
-                var srcvalue = "";
-                if (attr == container.Entity(entity1.LogicalName).PrimaryIdAttribute)
-                {
-                    srcvalue = entity1.Id.ToString();
-                }
-                else
-                {
-                    srcvalue = container.AttributeAsBaseType(entity1, attr, "<null>", true).ToString();
-                }
-                var trgvalue = container.AttributeAsBaseType(entity2, attr, "<null>", true).ToString();
-                if (srcvalue != trgvalue)
+                if (SourceAttributeValue(container, entity1, attr) != TargetAttributeValue(container, entity2, attr))
                 {
                     match = false;
                     break;
                 }
             }
             return match;
+        }
+
+        /// <summary>
+        /// The value of a source record's attribute as compared when matching. The primary key is
+        /// read from Entity.Id, because a record deserialized from a data file does not carry it
+        /// as an attribute.
+        /// </summary>
+        private static string SourceAttributeValue(IExecutionContainer container, Entity entity, string attr) =>
+            attr == container.Entity(entity.LogicalName).PrimaryIdAttribute
+                ? entity.Id.ToString()
+                : TargetAttributeValue(container, entity, attr);
+
+        /// <summary>The value of a target record's attribute as compared when matching.</summary>
+        private static string TargetAttributeValue(IExecutionContainer container, Entity entity, string attr) =>
+            container.AttributeAsBaseType(entity, attr, "<null>", true)?.ToString() ?? "<null>";
+
+        /// <summary>
+        /// A key that is equal for two records exactly when EntityAttributesEqual would call them
+        /// equal on <paramref name="matchattributes"/>. Each value is length-prefixed, so no value
+        /// can run into the next.
+        /// </summary>
+        private static string MatchKey(List<string> matchattributes, Func<string, string> value)
+        {
+            var key = new System.Text.StringBuilder();
+            foreach (var attr in matchattributes)
+            {
+                var part = value(attr);
+                key.Append(part.Length).Append(':').Append(part);
+            }
+            return key.ToString();
         }
 
         private static string GetEntityDisplayString(IExecutionContainer container, DataBlockImportMatch match, Entity cdEntity)
@@ -172,7 +192,7 @@
             }
         }
 
-        private EntityCollection GetAllRecordsForMatching(IExecutionContainer container, List<string> allattributes, Entity cdEntity)
+        private IPreRetrievedMatches GetAllRecordsForMatching(IExecutionContainer container, List<string> allattributes, List<string> matchattributes, Entity cdEntity)
         {
             container.StartSection(MethodBase.GetCurrentMethod().Name);
             var qMatch = new QueryExpression(cdEntity.LogicalName)
@@ -182,8 +202,16 @@
 #if DEBUG
             container.Log($"Retrieving all records for {cdEntity.LogicalName}:\n{container.ConvertToFetchXml(qMatch)}");
 #endif
-            var matches = container.RetrieveMultiple(qMatch);
-            SendLine(container, $"Pre-retrieved {matches.Count()} records for matching");
+            // RetrieveAll follows the paging cookie. A single RetrieveMultiple stops at 5000
+            // records, and every target record past that looked new, so it was created again.
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            var records = container.RetrieveAll(qMatch);
+            var matches = new InMemoryPreRetrievedMatches(
+                records.Entities,
+                target => MatchKey(matchattributes, attr => TargetAttributeValue(container, target, attr)),
+                source => MatchKey(matchattributes, attr => SourceAttributeValue(container, source, attr)));
+            timer.Stop();
+            SendLine(container, $"Pre-retrieved {matches.Count} records for matching ({matches.KeyCount} distinct match keys, {timer.ElapsedMilliseconds} ms)");
             container.EndSection();
             return matches;
         }
@@ -206,7 +234,7 @@
             return result;
         }
 
-        private EntityCollection GetMatchingRecords(IExecutionContainer container, Entity cdEntity, List<string> matchattributes, List<string> updateattributes, bool preretrieveall, ref EntityCollection cAllRecordsToMatch)
+        private EntityCollection GetMatchingRecords(IExecutionContainer container, Entity cdEntity, List<string> matchattributes, List<string> updateattributes, bool preretrieveall, ref IPreRetrievedMatches cAllRecordsToMatch)
         {
             container.StartSection(MethodBase.GetCurrentMethod().Name);
             EntityCollection matches = null;
@@ -228,9 +256,9 @@
             {
                 if (cAllRecordsToMatch == null)
                 {
-                    cAllRecordsToMatch = GetAllRecordsForMatching(container, allattributes, cdEntity);
+                    cAllRecordsToMatch = GetAllRecordsForMatching(container, allattributes, matchattributes, cdEntity);
                 }
-                matches = GetMatchingRecordsFromPreRetrieved(container, matchattributes, cdEntity, cAllRecordsToMatch);
+                matches = GetMatchingRecordsFromPreRetrieved(container, cdEntity, cAllRecordsToMatch);
             }
             else
             {
@@ -269,18 +297,14 @@
             return matches;
         }
 
-        private EntityCollection GetMatchingRecordsFromPreRetrieved(IExecutionContainer container, List<string> matchattributes, Entity cdEntity, EntityCollection cAllRecordsToMatch)
+        private EntityCollection GetMatchingRecordsFromPreRetrieved(IExecutionContainer container, Entity cdEntity, IPreRetrievedMatches cAllRecordsToMatch)
         {
             container.StartSection(MethodBase.GetCurrentMethod().Name);
             container.Log($"Searching matches for: {cdEntity.Id} {cdEntity.LogicalName}");
-            var result = new EntityCollection();
-            foreach (var cdRecord in cAllRecordsToMatch.Entities)
+            var result = cAllRecordsToMatch.Find(cdEntity);
+            foreach (var cdRecord in result.Entities)
             {
-                if (EntityAttributesEqual(container, matchattributes, cdEntity, cdRecord))
-                {
-                    result.Add(cdRecord);
-                    container.Log($"Found match: {cdRecord.Id} {cdRecord.LogicalName}");
-                }
+                container.Log($"Found match: {cdRecord.Id} {cdRecord.LogicalName}");
             }
             container.Log($"Returned matches: {result.Count()}");
             container.EndSection();
@@ -401,7 +425,7 @@
                 }
                 var totalRecords = cEntities.Count();
                 i = 1;
-                EntityCollection cAllRecordsToMatch = null;
+                IPreRetrievedMatches cAllRecordsToMatch = null;
                 var pendingCreates = new List<PendingCreate>();
                 var pendingUpdates = new List<PendingUpdate>();
                 var pendingUpserts = new List<PendingUpsert>();

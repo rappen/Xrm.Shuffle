@@ -93,6 +93,18 @@ next step needs the server to already know about the pending records — before 
 record still in the batch. `IsBatchable` decides what may be batched at all; among
 other things it excludes any record carrying `statecode`, `statuscode` or `ownerid`.
 
+### PreRetrieveAll matching
+
+`GetAllRecordsForMatching` reads the whole target table with `RetrieveAll` from
+Xrm.Utils.Core, which follows the paging cookie - a plain `RetrieveMultiple` stops at
+5000 records, and every target record past that looked new. The rows are indexed once
+by match key (`InMemoryPreRetrievedMatches` behind `IPreRetrievedMatches`), so each
+source record is one lookup rather than a scan. The key is built from the same
+`SourceAttributeValue`/`TargetAttributeValue` strings `EntityAttributesEqual` compares,
+so the two cannot disagree. The test double `RecordingOrganizationService` pages
+QueryExpressions at 5000 like Dataverse does; FakeXrmEasy alone would not catch a caller
+that ignores paging.
+
 ### DeferStateAndOwner
 
 When `DeferStateAndOwner` is enabled, `statecode`/`statuscode`/`ownerid` are stripped

@@ -62,6 +62,7 @@
     <Compile Include="Helpers\ShufflerTestShim.cs" />
     <Compile Include="Helpers\TestExecutionContainer.cs" />
     <Compile Include="Layer1\BatchResponsePairingTests.cs" />
+    <Compile Include="Layer1\RetrieveAllTests.cs" />
     <Compile Include="Layer1\BulkMessageFallbackTests.cs" />
     <Compile Include="Layer1\BulkMessageRoutingTests.cs" />
     <Compile Include="Layer1\UpdateAndDeletePairingTests.cs" />
@@ -69,6 +70,7 @@
     <Compile Include="Layer2\CapabilityDetectionTests.cs" />
     <Compile Include="Layer2\ExportAttributeSelectionTests.cs" />
     <Compile Include="Layer2\MatchResolutionTests.cs" />
+    <Compile Include="Layer2\PreRetrievedMatchingTests.cs" />
     <Compile Include="Layer2\SkipIdenticalTests.cs" />
     <Compile Include="Layer2\UpsertGateTests.cs" />
     <Compile Include="Layer3\DeferStateAndOwnerTests.cs" />

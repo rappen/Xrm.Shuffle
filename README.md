@@ -188,7 +188,7 @@ When the Upsert path is active:
 
 When the Match-based path is active:
 - 🔍 Each record is matched against target using `<Match>` attributes
-- 🔍 `PreRetrieveAll="true"` fetches all target records up-front (recommended for large imports on small-to-medium target datasets)
+- 🔍 `PreRetrieveAll="true"` fetches all target records up-front (recommended for large imports on small-to-medium target datasets). Every row of the target table is read, page by page past Dataverse's 5000-record limit, and held in memory, indexed by its match values. The log reports how many were read and how long it took: `Pre-retrieved N records for matching (K distinct match keys, T ms)`
 - 🔍 `PreRetrieveAll="false"` (default) queries for matches per-record (better for small imports or very large target datasets)
 
 | Configuration | Import Path | PreRetrieveAll Effect |
@@ -207,7 +207,7 @@ When the Match-based path is active:
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `PreRetrieveAll` | boolean | `false` | Fetch all existing target records up-front before import starts. Only applies when using the **Match-based path** (see Import Path Selection above). Recommended for large imports targeting small-to-medium datasets. When the **Upsert path** is active, this flag is automatically bypassed. |
+| `PreRetrieveAll` | boolean | `false` | Fetch all existing target records up-front before import starts. Only applies when using the **Match-based path** (see Import Path Selection above). Recommended for large imports targeting small-to-medium datasets. The whole target table is held in memory (only the primary key, the match attributes and the imported attributes), which is fine into the hundreds of thousands of rows; for tables in the millions, prefer the Upsert path or per-record matching. When the **Upsert path** is active, this flag is automatically bypassed. |
 
 Add one or more `<Attribute Name="..." Display="...">` children — these are the fields used to match incoming records against existing target records. `Display` is an optional alternate attribute used for the matched value in log output.
 

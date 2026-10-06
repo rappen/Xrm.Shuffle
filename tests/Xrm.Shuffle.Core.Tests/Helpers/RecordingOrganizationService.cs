@@ -178,10 +178,55 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
             return inner.Retrieve(entityName, id, columnSet);
         }
 
+        /// <summary>The most records Dataverse returns from one RetrieveMultiple.</summary>
+        public const int MaxPageSize = 5000;
+
+        /// <summary>
+        /// Pages a QueryExpression the way Dataverse does. Without this the fake returns every
+        /// row at once, and a caller that never follows the paging cookie looks correct.
+        /// </summary>
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
             queries.Add(query);
-            return inner.RetrieveMultiple(query);
+            var expression = query as QueryExpression;
+            if (expression == null || expression.TopCount.HasValue)
+            {
+                return inner.RetrieveMultiple(query);
+            }
+
+            var pageInfo = expression.PageInfo;
+            var size = pageInfo != null && pageInfo.Count > 0 ? Math.Min(pageInfo.Count, MaxPageSize) : MaxPageSize;
+            var number = pageInfo != null && pageInfo.PageNumber > 0 ? pageInfo.PageNumber : 1;
+            var all = new List<Entity>();
+            string entityName = null;
+            try
+            {
+                // The fake caps an unpaged query at 5000 itself, so read the whole result from
+                // it page by page and hand out the requested page from that.
+                for (var fakePage = 1; ; fakePage++)
+                {
+                    expression.PageInfo = new PagingInfo { Count = MaxPageSize, PageNumber = fakePage };
+                    var chunk = inner.RetrieveMultiple(expression);
+                    entityName = chunk.EntityName;
+                    all.AddRange(chunk.Entities);
+                    if (!chunk.MoreRecords || chunk.Entities.Count == 0)
+                    {
+                        break;
+                    }
+                }
+            }
+            finally
+            {
+                expression.PageInfo = pageInfo;
+            }
+
+            var page = new EntityCollection(all.Skip((number - 1) * size).Take(size).ToList())
+            {
+                EntityName = entityName,
+                MoreRecords = all.Count > number * size,
+            };
+            page.PagingCookie = page.MoreRecords ? "<cookie page=\"" + number + "\" />" : null;
+            return page;
         }
 
         public OrganizationResponse Execute(OrganizationRequest request)
