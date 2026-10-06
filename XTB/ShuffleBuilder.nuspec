@@ -19,13 +19,15 @@
 		</description>
 		<summary>Build schema files for the Shuffle. Empower yourself to achieve more.</summary>
 		<releaseNotes>
-- New Batch size field on Import configuration, opting a block in to bulk-message batching (default 1, no batching)
-- New Defer state and owner checkbox on Import configuration, with a tooltip explaining when it helps
-- Multi-Select OptionSet (OptionSetValueCollection) export/import support
-- Deterministic attribute ordering in XML export for clean version control diffs
-- Fixed off-by-one error in CSV/text export
-- Performance improvements: metadata lookup hoisting, HashSet deduplication, optimized attribute filtering
-- Update failure messages now include exception details
+Changes since 1.2023.5:
+
+- New Batch size field on the Import node (default 1, no batching; max 1000).
+- New Defer state and owner checkbox on the Import node, with a tooltip explaining when it helps.
+- Definitions follow the updated schema: BatchSize and DeferStateAndOwner on Import.
+- .NET Framework 4.8; ILMerge removed; DotNetZip replaced with System.IO.Compression.
+
+The import engine changes are listed in the Shuffle Runner release notes.
+Full details: https://github.com/rappen/Xrm.Shuffle#whats-new-since-120235
 		</releaseNotes>
 		<copyright>Copyright 2023-2026 Jonas Rapp, Imran Akram</copyright>
 		<tags>XrmToolBox Shuffle</tags>

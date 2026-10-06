@@ -10,25 +10,45 @@
 		<iconUrl>https://jonasr.app/wp-content/uploads/Shuffle2-D.png</iconUrl>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
 		<description>
-			The Shuffle Deployer can deploy datas and solutions defined by the Shuffle definitions in a controlled way - without advanced pipelines.
+			The Shuffle Deployer can deploy data and solutions defined by the Shuffle definitions in a controlled way - without advanced pipelines.
 
 			Installing this tool, will also include the other tools for the Shuffle:
 			Shuffle Builder and Shuffle Runner.
 
 			Read more: https://jonasr.app/shuffle
 		</description>
-		<summary>Deploy solutions and datas with the Shuffle. Empower yourself to achieve more.</summary>
+		<summary>Deploy solutions and data with the Shuffle. Empower yourself to achieve more.</summary>
 		<releaseNotes>
-- Opt-in batching for import operations: set BatchSize above 1 to enable it (default 1, no batching)
-- New Import option DeferStateAndOwner: statecode/statuscode/ownerid are applied in a second pass so the records themselves stay batchable
-- Batching now also engages for blocks that use Match, except where a live match query has to see the pending records first
-- Failed rows in a batch are reported and no longer counted as successes
-- Rows rejected because they match several records in the target now log the row number, like every other result line
-- Multi-Select OptionSet (OptionSetValueCollection) export/import support
-- Deterministic attribute ordering in XML export for clean version control diffs
-- Fixed off-by-one error in CSV/text export
-- Performance improvements: metadata lookup hoisting, HashSet deduplication, optimized attribute filtering
-- Update failure messages now include exception details
+Changes since 1.2023.5:
+
+Import
+- Opt-in batching: set BatchSize above 1 on an Import to use CreateMultiple/UpdateMultiple, ExecuteMultiple on-premises, or individual requests where neither is available. At the default of 1, nothing changes.
+- New DeferStateAndOwner option: state and owner are applied in a second pass, so those records can be batched too.
+- Upsert path (UpsertMultiple) for blocks that match on the primary key only, with BatchSize above 1 and UpdateIdentical.
+- PreRetrieveAll now reads the whole target table. It stopped at 5000 records, so records beyond that were created again.
+- PreRetrieveAll matching is a single lookup per record instead of a scan of the whole table.
+- Failed records in a batch are logged with row and server message, and never counted as saved.
+- Multi-select choice columns (OptionSetValueCollection) export and import correctly.
+
+Logs
+- Values instead of SDK type names, no more "[START of ToString]" noise, and correctly nested sections, also after an error.
+- Log files are named after the definition, operation, connection and time.
+
+Export
+- Columns are written in alphabetical order, so re-exports give clean diffs.
+- Fixed an off-by-one error in text export.
+
+Solutions
+- A zip without solution.xml gives a clear error.
+
+Platform
+- .NET Framework 4.8; ILMerge removed; DotNetZip replaced with System.IO.Compression.
+
+Behaviour changes
+- A failed update now counts as Failed (it was counted as Skipped) and stops the run with StopOnError.
+- PreRetrieveAll reads the whole target table; avoid it on very large tables.
+
+Full details: https://github.com/rappen/Xrm.Shuffle#whats-new-since-120235
 		</releaseNotes>
 		<copyright>Copyright 2023-2026 Jonas Rapp, Imran Akram</copyright>
 		<tags>XrmToolBox Shuffle</tags>

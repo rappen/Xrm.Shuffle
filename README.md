@@ -7,69 +7,70 @@ Created by [@rappen](https://github.com/rappen)
 <br/>
 Improving by [@imranakram](https://github.com/imranakram) & [@rappen](https://github.com/rappen)
 
-[XrmToolBox](http://www.xrmtoolbox.com) tools to help compose and run/test **Shuffle Schema Definitions** — XML files that define exactly what data and solutions to export or import between Dataverse environments.
-
+[XrmToolBox](http://www.xrmtoolbox.com) tools to compose and run **Shuffle definitions** - XML
+files that describe exactly which data and solutions to export from, or import into, a Dataverse
+environment. The same engine runs in Azure DevOps pipelines through the
+[Innofactor CRM CI build tasks](https://marketplace.visualstudio.com/items?itemName=InnofactorSE.cinteros-devutils-ci-build-tasks).
 
 ---
-### *Shuffle tools are now available in the XrmToolBox Tool Library!* 🥳
+### *Shuffle tools are available in the XrmToolBox Tool Library!* 🥳
 ---
 
 ## The Three Tools
 
 ### 🏗️ Shuffle Builder
-The Builder helps you **create and edit Shuffle Definition XML files** through a visual UI — no hand-coding required.
+The Builder **creates and edits Shuffle definition files** through a visual UI - no hand-coding
+required.
 
-- Connects to a Dataverse environment to browse entities, attributes, and relationships
+- Connects to a Dataverse environment to browse tables, columns and relationships
 - Build `<DataBlock>` and `<SolutionBlock>` nodes by pointing and clicking
-- Copy, paste, and reorder blocks
-- Save `.xml` definition files that are then consumed by the Runner or Deployer
-- Available in the XrmToolBox Tool Library as **`Rappen.XrmToolBox.Shuffle.Builder`**
-
----
+- Copy, paste and reorder blocks
+- Save `.xml` definition files for the Runner, the Deployer or a pipeline
+- Available in the Tool Library as **`Rappen.XrmToolBox.Shuffle.Builder`**
 
 ### 🏃 Shuffle Runner
-The Runner **executes a Shuffle Definition** — exporting data from or importing data into a connected Dataverse environment.
+The Runner **executes a Shuffle definition** - exporting from or importing into the connected
+environment.
 
-- Load a definition file and a data file, then hit Run
-- Supports both **Export** (Dataverse → XML/CSV file) and **Import** (file → Dataverse) modes
-- Multiple serialization styles: Simple, SimpleWithValue, SimpleNoId, Explicit, Text, Full
-- Filter records by attribute value or supply your own FetchXML
-- High-performance bulk imports using **CreateMultiple/UpdateMultiple** on Dataverse (online) or **ExecuteMultipleRequest** on-premises
-- Automatic runtime detection and fallback for maximum compatibility across Dynamics CRM 9.1 and all Dataverse versions
-- Generates detailed, timestamped operation logs
-- Available in the XrmToolBox Tool Library as **`Rappen.XrmToolBox.Shuffle.Runner`**
-
----
+- Load a definition file and, for imports, a data file, then run it
+- **Export** (Dataverse → XML or text file) and **Import** (file → Dataverse)
+- Serialization styles: Simple, SimpleWithValue, SimpleNoId, Explicit, Text, Full
+- Filter records by attribute value, or supply your own FetchXML
+- Optional bulk import - see [Batching and performance](#batching-and-performance)
+- Writes a log file next to the definition, named
+  `<definition>_<Import|Export>_<connection>_<yyyyMMdd>_<HHmmss>.log`
+- Available in the Tool Library as **`Rappen.XrmToolBox.Shuffle.Runner`**
 
 ### 🚚 Shuffle Deployer
-The Deployer orchestrates **controlled deployments** of packaged Shuffle definitions across environments.
+The Deployer runs **controlled deployments** of packaged Shuffle definitions across environments.
 
-- Works with `.cdpkg` / `.cdzip` package files that bundle definition and data files together
-- Select which modules within a package to deploy and run them in sequence
-- Progress tracking and detailed logs at every step
-- Supports **double-click launch**: associate `.cdpkg` files with XrmToolBox and the Deployer will auto-load the package on startup
-- Available in the XrmToolBox Tool Library as **`Rappen.XrmToolBox.Shuffle.Deployer`**
+- Works with `.cdpkg` / `.cdzip` packages that bundle definitions and data files
+- Select which modules of a package to deploy, and run them in sequence
+- Progress tracking and a log at every step
+- **Double-click launch**: associate `.cdpkg` files with XrmToolBox and the Deployer loads the
+  package on startup
+- Available in the Tool Library as **`Rappen.XrmToolBox.Shuffle.Deployer`**
 
 ---
 
 ## Schema Reference
 
-All three tools are driven by a **Shuffle Definition XML file** that follows the `ShuffleDefinition.xsd` schema. You can author these files in the Builder UI or by hand. Below is a full reference of every element and attribute.
+All three tools are driven by a **Shuffle definition** that follows `ShuffleDefinition.xsd`
+(`shared/Xrm.Shuffle.Core/Resources`). Author it in the Builder or by hand.
 
----
-
-### `<ShuffleDefinition>` — Root element
+### `<ShuffleDefinition>` - Root element
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `Timeout` | int | — | Operation timeout in minutes |
-| `StopOnError` | boolean | `false` | Halt all remaining blocks if any block fails |
+| `Timeout` | int | 2 | Minutes to wait for an **asynchronous solution import** to finish once the import job has started. It does not limit anything else. |
+| `StopOnError` | boolean | `false` | Stop the run at the first record or solution that fails, instead of logging it and carrying on |
 
-Contains a `<Blocks>` child holding any combination of `<SolutionBlock>` and `<DataBlock>` elements, processed in order.
+Contains a `<Blocks>` element holding any combination of `<SolutionBlock>` and `<DataBlock>`,
+processed in order.
 
 ---
 
-### `<SolutionBlock>` — Import or export a solution
+### `<SolutionBlock>` - Import or export a solution
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
@@ -82,171 +83,169 @@ Contains a `<Blocks>` child holding any combination of `<SolutionBlock>` and `<D
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `Type` | `Managed` / `Unmanaged` / `Both` / `None` | required | Solution package type to export |
-| `SetVersion` | string | — | Override the solution version on export |
+| `SetVersion` | string | - | Set the solution version before exporting |
 | `PublishBeforeExport` | boolean | `false` | Publish all customizations before exporting |
-| `TargetVersion` | string | — | Target platform version for the export |
+| `TargetVersion` | string | - | Target platform version for the export |
 
-`<Settings>` (optional child of `<Export>`) — include additional settings components in the export. All boolean, default `false`:
+`<Settings>` (optional child of `<Export>`) - include settings in the export. All boolean,
+default `false`:
 
-`AutoNumbering` · `Calendar` · `Customization` · `EmailTracking` · `General` · `Marketing` · `OutlookSync` · `RelationshipRoles` · `IsvConfig`
+`AutoNumbering` · `Calendar` · `Customization` · `EmailTracking` · `General` · `Marketing` ·
+`OutlookSync` · `RelationshipRoles` · `IsvConfig`
 
 #### `<Import>` (optional child)
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `Type` | `Managed` / `Unmanaged` / `Both` / `None` | required | Expected package type to import |
-| `OverwriteSameVersion` | boolean | `true` | Import even when the same version already exists in the target |
+| `Type` | `Managed` / `Unmanaged` / `Both` / `None` | required | Package type to import |
+| `OverwriteSameVersion` | boolean | `true` | Import even when the target already has the same version |
 | `OverwriteNewerVersion` | boolean | `false` | Import even when the target already has a newer version |
 | `ActivateServersideCode` | boolean | required | Activate plug-ins and workflows after import |
 | `OverwriteCustomizations` | boolean | required | Overwrite unmanaged customizations |
-| `PublishAll` | boolean | required | Publish all after import completes |
+| `PublishAll` | boolean | required | Publish all customizations after the import |
 
-`<PreRequisites>` — one or more `<Solution>` elements that must be present in the target before import begins:
+`<PreRequisites>` - one or more `<Solution>` elements that must be present in the target before
+the import starts:
 
 | Attribute | Description |
 |-----------|-------------|
 | `Name` | Solution unique name |
-| `Comparer` | Version comparison rule: `any`, `eq-this`, `ge-this`, `eq`, `ge` |
-| `Version` | Required version string (used with `eq` / `ge`) |
+| `Comparer` | Version rule: `any`, `eq-this`, `ge-this` (compared with the version of the solution being imported), `eq`, `ge` (compared with `Version`) |
+| `Version` | Required version, used with `eq` / `ge`. A `*` is read as `0`, so `ge` with `1.2.*` means at least 1.2.0 |
 
-`<PostSuccessfulImportBlocks>` — a nested `<Blocks>` element whose blocks are run only after a successful import.
+`<PostSuccessfulImportBlocks>` - a nested `<Blocks>` element whose blocks run only after a
+successful import.
 
 ---
 
-### `<DataBlock>` — Export or import entity records
+### `<DataBlock>` - Export or import records
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| `Name` | string (required) | Unique name for this block |
-| `Entity` | string (required) | Dataverse entity logical name |
+| `Name` | string (required) | Unique name for this block; the data file refers to it |
+| `Entity` | string (required) | Table logical name |
 | `Type` | `Entity` / `Intersect` | `Entity` (default) for regular tables; `Intersect` for N:N relationship tables |
-| `IntersectName` | string | The intersect entity logical name — required when `Type=Intersect` |
+| `IntersectName` | string | Intersect table logical name, when it differs from `Entity` |
 
 #### `<Export>` (optional child)
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `ActiveOnly` | boolean | `false` | Skip inactive/disabled records |
+| `ActiveOnly` | boolean | `false` | Skip inactive records |
 
 Choose one of two query modes:
 
-**Filter-based mode** — combine filters, sorting, and an explicit attribute list:
-- `<Filter Attribute="..." Operator="..." Type="string|guid|int|bool|datetime|null|not-null" Value="...">` — add as many as needed
-- `<Sort Attribute="..." Type="Asc|Desc">` — add as many as needed
-- `<Attributes>` containing `<Attribute Name="..." IncludeNull="false">` — **required**; defines which fields to include in the export
+**Filter mode** - combine filters, sorting and an explicit column list:
+- `<Filter Attribute="..." Operator="..." Type="string|guid|int|bool|datetime|null|not-null" Value="...">` - as many as needed
+- `<Sort Attribute="..." Type="Asc|Desc">` - as many as needed
+- `<Attributes>` containing `<Attribute Name="..." IncludeNull="false">` - **required**; the columns to export. `Name` may start and/or end with a `*` (or `%`) wildcard, such as `cint_*`; matching is case-insensitive.
 
-**FetchXML mode** — supply your own query (defines both filters and returned attributes):
-- `<FetchXML>` — paste your raw FetchXML string here; mutually exclusive with the filter-based mode
+**FetchXML mode** - supply your own query, which defines both filters and columns:
+- `<FetchXML>` - the raw FetchXML; mutually exclusive with filter mode
 
 #### `<Import>` (optional child)
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `Save` | `CreateUpdate` / `CreateOnly` / `UpdateOnly` / `Never` | `CreateUpdate` | Whether to create new records, update existing ones, both, or skip saving |
-| `Delete` | `None` / `Existing` / `All` | `None` | `None` = no deletes; `Existing` = delete records in target not present in import; `All` = delete all target records first |
-| `CreateWithId` | boolean | `false` | Preserve the source record GUID when creating records in the target |
-| `UpdateInactive` | boolean | `false` | Allow updating inactive/disabled records |
-| `UpdateIdentical` | boolean | `false` | Send an update call even when no field values have changed |
-| `BatchSize` | int | `1` | Records per bulk operation batch. Batching is **opt-in**: at the default of `1` every record is imported individually, as it was before batching existed. Set it above `1` to batch — Microsoft recommends ~100 for standard tables. Maximum `1000`. |
-| `DeferStateAndOwner` | boolean | `false` | Strip `statecode`, `statuscode`, and `ownerid` from records during import and apply them in a second pass using bulk operations. Records carrying those attributes cannot be batched, so deferring them is what lets such a block use batching at all. |
-| `Overwrite` | boolean | — | ⚠️ **Deprecated** — use `Save` instead |
+| `Save` | `CreateUpdate` / `CreateOnly` / `UpdateOnly` / `Never` | `CreateUpdate` | Whether to create missing records, update matched ones, both, or neither |
+| `Delete` | `None` / `Existing` / `All` | `None` | `Existing`: a record that matches exactly one target record replaces it - the target record is deleted and the source record created. `All`: without `<Match>`, delete **every** record of the table in the target before importing; with `<Match>`, delete all matching target records before creating. |
+| `CreateWithId` | boolean | `false` | Create records with their source id instead of a new one |
+| `UpdateInactive` | boolean | `false` | Update matched records that are inactive in the target; the record is activated first. Shuffle only knows a target record's state when the source record carries `statecode`. |
+| `UpdateIdentical` | boolean | `false` | Write matched records even when nothing has changed, instead of skipping them as `(Identical)` |
+| `BatchSize` | int | `1` | Records per bulk request, up to `1000`. **Batching is opt-in**: at `1` every record is written individually, exactly as before batching existed. See [Batching and performance](#batching-and-performance). |
+| `DeferStateAndOwner` | boolean | `false` | Save records without `statecode`, `statuscode` and `ownerid`, and apply those in a second pass, so the records themselves can be batched |
+| `Overwrite` | boolean | - | ⚠️ **Deprecated** - use `Save` |
 
-> **Performance tip:** Shuffle automatically uses **CreateMultiple/UpdateMultiple/UpsertMultiple** bulk operations on Dataverse (online) for maximum throughput, falling back to **ExecuteMultipleRequest** for on-premises CRM 9.1 compatibility, and further falling back to individual operations for CRM 8.x and older. `BatchSize` controls how many records are grouped per API call, and it defaults to `1` — nothing is batched until a definition asks for it. Set it to ~100 to opt in, which is Microsoft's recommendation for standard tables; larger values (up to 1000) may improve throughput for simple operations. Note that `CreateMultiple` and `UpdateMultiple` are a single transaction, so one bad record fails the whole batch, where an unbatched import would have failed only that record. For records with complex plug-ins, keep the value low or leave batching off.
-
-> **UpsertMultiple optimization:** When a block sets `BatchSize` above `1`, imports with `Save="CreateUpdate"`, `CreateWithId="true"` and `UpdateIdentical="true"`, and matches on the primary key alone, Shuffle uses **UpsertMultiple** on Dataverse, eliminating the `PreRetrieveAll` queries by letting Dataverse decide whether to create or update each record. Upsert finds records by primary key only, so a block that matches on anything else keeps the Match-based path.
-
-> **DeferStateAndOwner optimization:** Records carrying `statecode`, `statuscode` or `ownerid` are excluded from batching, so without this option a block full of inactive or reassigned records is imported one row at a time. With `DeferStateAndOwner="true"` those attributes are stripped before the record is saved, the record goes through the normal batched path, and the state and owner changes are applied afterwards in a second pass. The end state of each record is the same. How much this gains depends on what share of the block carries those attributes — a block where none do gains nothing. Use it when migrating between environments where preserving state and ownership matters.
-
-> **`StopOnError` and batching:** batching does not change *whether* a run stops on a server error, but it does change what has already happened when it stops. With `StopOnError="true"` batches are sent with `ContinueOnError = false`, so the platform stops at the first faulting record and the remaining records **in that same batch are not executed**. Shuffle names the faulting row, logs how many records in the flight were left undone — `StopOnError: aborting, N record(s) in this batch were not executed` — and aborts the run. Those records are not counted as saved. With `StopOnError="false"` the whole batch is attempted and every faulting row is logged individually as `NNN Update Failed: …` / `NNN Create Failed: …` with the server's own message, and counted in `Failed`, so the closing `Created: … Updated: … Skipped: … Deleted: … Failed: …` line always adds up to the number of rows in the block. Either way, a row the server rejected is never reported as a success.
-
-#### Import Path Selection
-
-Shuffle automatically selects the optimal import strategy based on your configuration. Understanding when each path is used helps you configure imports for best performance.
-
-**Upsert Path** (fastest, Dataverse only) — Used when ALL of these conditions are met:
-- `BatchSize` above `1` — like the rest of the bulk machinery, Upsert is opt-in
-- `Save="CreateUpdate"` — records may be created or updated
-- `CreateWithId="true"` — records include their primary key
-- `<Match>` has exactly one attribute, the primary key (e.g. `accountid`) — Upsert finds the target record by primary key and nothing else, so a Match on any other attribute (a name, say) has to stay on the Match-based path, or a record that exists under a different id would be created a second time
-- `Delete="None"` (or not specified) — no deletion of existing records
-- `UpdateIdentical="true"` — Upsert never retrieves the existing record, so it cannot tell an identical row from a changed one and always writes. Without this flag the block has asked for identical records to be skipped, which Upsert cannot honour, so the Match-based path is used instead.
-
-When the Upsert path is active:
-- ✅ **UpsertMultiple** sends records directly to Dataverse without pre-querying
-- ✅ `PreRetrieveAll` is **automatically bypassed** (not needed since Dataverse decides create vs update)
-- ✅ No match queries are executed — Dataverse handles matching internally using the record's primary key
-- ⚠️ Falls back gracefully on CRM 9.1 on-premises (ExecuteMultiple + Upsert) or CRM 8.x (individual Create/Update)
-
-**Match-based Path** (traditional) — Used when ANY of these conditions apply:
-- `BatchSize` is `1` (the default) — no batching was asked for
-- `<Match>` uses anything other than the primary key alone
-- `UpdateIdentical="false"` (the default) — identical records must be detected and skipped
-- `Save="CreateOnly"` or `Save="UpdateOnly"` — one-directional operations
-- `CreateWithId="false"` — records don't include their primary key
-- `Delete="Existing"` or `Delete="All"` — deletion requires knowing which records exist
-- No `<Match>` attributes defined — no way to identify existing records
-
-When the Match-based path is active:
-- 🔍 Each record is matched against target using `<Match>` attributes
-- 🔍 `PreRetrieveAll="true"` fetches all target records up-front (recommended for large imports on small-to-medium target datasets). Every row of the target table is read, page by page past Dataverse's 5000-record limit, and held in memory, indexed by its match values. The log reports how many were read and how long it took: `Pre-retrieved N records for matching (K distinct match keys, T ms)`
-- 🔍 `PreRetrieveAll="false"` (default) queries for matches per-record (better for small imports or very large target datasets)
-
-| Configuration | Import Path | PreRetrieveAll Effect |
-|---------------|-------------|----------------------|
-| `BatchSize` > 1 + `Save="CreateUpdate"` + `CreateWithId="true"` + Match on the primary key only + `Delete="None"` + `UpdateIdentical="true"` | Upsert | Bypassed (not needed) |
-| `BatchSize="1"` (the default) | Match-based | Active |
-| Match on anything but the primary key alone | Match-based | Active |
-| `Save="CreateUpdate"` + `CreateWithId="false"` | Match-based | Active |
-| `UpdateIdentical="false"` (the default) | Match-based | Active |
-| `Save="CreateOnly"` (any other flags) | Match-based | Active |
-| `Save="UpdateOnly"` (any other flags) | Match-based | Active |
-| `Delete="Existing"` or `Delete="All"` | Match-based | Active |
-| No `<Match>` defined | Direct Create | N/A (no matching) |
-
-`<Match>` — controls how the importer finds existing target records to decide whether to create or update:
+`<Match>` - how the import finds the existing target record for each source record:
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `PreRetrieveAll` | boolean | `false` | Fetch all existing target records up-front before import starts. Only applies when using the **Match-based path** (see Import Path Selection above). Recommended for large imports targeting small-to-medium datasets. The whole target table is held in memory (only the primary key, the match attributes and the imported attributes), which is fine into the hundreds of thousands of rows; for tables in the millions, prefer the Upsert path or per-record matching. When the **Upsert path** is active, this flag is automatically bypassed. |
+| `PreRetrieveAll` | boolean | `false` | Read the whole target table once at the start of the block and match against it in memory, instead of one query per record. Required for batching a matched block. |
 
-Add one or more `<Attribute Name="..." Display="...">` children — these are the fields used to match incoming records against existing target records. `Display` is an optional alternate attribute used for the matched value in log output.
+Add one or more `<Attribute Name="..." Display="...">` children: the columns compared to find the
+match. `Display` names a different column to show for the record in the log.
 
-#### `<Relation>` (optional, repeatable)
-
-Associates records from another `<DataBlock>` — used for N:N relationships or populating lookups:
+`<Relation>` (optional, repeatable) - restricts the export to records related to another block's
+records:
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | `Block` | string (required) | Name of the `DataBlock` that provides the related records |
-| `Attribute` | string (required) | Lookup attribute on this entity |
-| `PK-Attribute` | string | Primary key attribute on the related block (optional; defaults to the block entity's primary key) |
-| `IncludeNull` | boolean | Include the relation even when the lookup value is null |
+| `Attribute` | string (required) | Lookup column on this table |
+| `PK-Attribute` | string | Column on the related block's records to compare with; defaults to its primary key |
+| `IncludeNull` | boolean | Also include records where the lookup is empty |
 
 ---
 
-## Recent Changes
+## Batching and performance
 
-### UpsertMultiple bulk operation support
-Import operations with `Save="CreateUpdate"` and `CreateWithId="true"` now automatically use **UpsertMultiple** on Dataverse (online), which provides significant performance benefits:
+Every import option below is **opt-in**. A definition that sets none of them imports one record
+at a time, as before.
 
-- **Eliminates PreRetrieveAll queries** — when Upsert is available, the system no longer needs to query existing records to determine create vs. update. Dataverse makes this decision automatically.
-- **Single batch for all records** — instead of separate batches for creates and updates, all records go through a unified Upsert batch.
-- **Same robust fallback chain** — automatically falls back through multiple tiers:
-  1. **UpsertMultiple** (Dataverse online only)
-  2. **ExecuteMultipleRequest with UpsertRequest** (CRM 9.1 on-premises)
-  3. **Individual UpsertRequest** (fallback)
-  4. **Individual Create/Update** (CRM 8.x and older)
+### Turning batching on
 
-**When Upsert is used automatically:**
-- `Save="CreateUpdate"` (not CreateOnly or UpdateOnly)
-- `CreateWithId="true"` (records have their source GUID preserved)
-- `<Match>` attributes are defined
-- `Delete` is set to `None` (no deletion of existing records)
+Set `BatchSize` (about `100` is Microsoft's recommendation for standard tables). Shuffle then
+detects per table what the environment supports and uses, in order:
 
-**Example configuration:**
+1. **`CreateMultiple` / `UpdateMultiple`** - Dataverse online
+2. **`ExecuteMultipleRequest`** - on-premises 9.1, and tables without the bulk messages
+3. **individual requests** - when neither is available
+
+Detection is cached per table for the run, and the log says what it found, such as
+`CreateMultiple support for account: True`.
+
+A block that uses `<Match>` only batches with **`PreRetrieveAll="true"`**. Without it, every
+record runs its own match query, which has to see the records created so far, so the pending
+batch is sent before each query and nothing is grouped.
+
+Records carrying `statecode`, `statuscode` or `ownerid` are never batched, because those need
+separate requests. `DeferStateAndOwner="true"` saves them without those columns, in batches, and
+then applies them in a second pass: state with `UpdateMultiple` where the table supports it,
+owners with `Assign`. The end result is the same. A block that carries nothing but state and
+owner is left as it is, since deferring would leave nothing to save.
+
+### Things to know
+
+- **A batch is one transaction.** `CreateMultiple` and `UpdateMultiple` succeed or fail as a
+  whole, so one bad record fails its batch, where an unbatched import fails only that record. For
+  tables with heavy plug-ins, keep `BatchSize` low or leave batching off. Server-side plug-ins and
+  workflows run for every record either way; batching saves round trips, not their cost.
+- **`StopOnError="true"`** sends batches with `ContinueOnError = false`. The platform stops at the
+  first faulting record, the rest of that batch is not executed, and Shuffle logs
+  `StopOnError: aborting, N record(s) in this batch were not executed`. With
+  `StopOnError="false"` every record in the batch is attempted and each failure is logged and
+  counted, so `Created + Updated + Skipped + Failed` always adds up to the block's records.
+- **`PreRetrieveAll` holds the target table in memory.** Every page is read (past Dataverse's
+  5000-record page) with only the primary key, the match columns and the imported columns, and
+  indexed by match values; the log reports
+  `Pre-retrieved N records for matching (K distinct match keys, T ms)`. That is fine into the
+  hundreds of thousands of rows. Avoid it on very large tables, and on tables whose imported
+  columns are heavy - an `annotation` block importing `documentbody` would read every attachment
+  in the environment.
+- **`PreRetrieveAll` does not see records created earlier in the same block.** If the data file
+  holds two records with the same match values, both are created. Without `PreRetrieveAll`, the
+  second would match the first.
+
+### The upsert path
+
+A block skips matching entirely and sends **`UpsertMultiple`**, letting Dataverse decide between
+create and update, when **all** of these hold:
+
+- `BatchSize` above `1`
+- `Save="CreateUpdate"` and `CreateWithId="true"`
+- `<Match>` has exactly one attribute: the table's primary key (such as `contactid`)
+- `Delete="None"`
+- `UpdateIdentical="true"` - upsert never reads the existing record, so it cannot skip identical ones
+
+Upsert finds records by primary key and nothing else, which is why any other `<Match>` keeps the
+match path: a record that exists in the target under another id would otherwise be created a
+second time. `PreRetrieveAll` is not needed and is skipped. Where `UpsertMultiple` is not
+available, Shuffle sends `UpsertRequest`s in an `ExecuteMultipleRequest`, and failing that,
+creates each record and updates it if it already exists.
+
 ```xml
 <DataBlock Name="Contacts" Entity="contact">
-  <Import Save="CreateUpdate" CreateWithId="true" BatchSize="100" DeferStateAndOwner="true">
+  <Import Save="CreateUpdate" CreateWithId="true" UpdateIdentical="true" BatchSize="100">
     <Match>
       <Attribute Name="contactid" />
     </Match>
@@ -254,66 +253,72 @@ Import operations with `Save="CreateUpdate"` and `CreateWithId="true"` now autom
 </DataBlock>
 ```
 
-**Performance impact:** For environment-to-environment migrations with `CreateWithId="true"`, imports can be **2-3× faster** because:
-1. No `PreRetrieveAll` query overhead
-2. No per-record match queries
-3. Single unified batch instead of separate create/update batches
+---
 
-**Backwards compatibility:** Full support maintained for all CRM/Dataverse versions. The system automatically detects capabilities and selects the optimal API path.
+## What's new since 1.2023.5
 
-### DeferStateAndOwner optimization for high-performance imports
-A new **`DeferStateAndOwner`** attribute on `<Import>` enables a two-pass import strategy that dramatically improves performance when importing records with `statecode`, `statuscode`, or `ownerid` attributes:
+### Import
+- **Opt-in batching** with `BatchSize`, using `CreateMultiple`/`UpdateMultiple`, `ExecuteMultipleRequest` or individual requests depending on what the environment supports
+- **`DeferStateAndOwner`** for batching records that carry state or owner
+- **Upsert path** for blocks matching on the primary key, with `UpsertMultiple`
+- The Builder has a **Batch size** field and a **Defer state and owner** checkbox on the Import node
+- **`PreRetrieveAll` reads the whole target table.** It stopped at 5000 records, so every source record whose match lay beyond that was created a second time
+- **`PreRetrieveAll` matching is a lookup** instead of a scan of the whole table for every record
+- A record that matches several target records is reported with its row number
+- A deferred state or owner change gets the real id of a record created in a batch, and changes for records that were never written are dropped instead of reported as failures
+- A record whose lookups point at a record still waiting in the batch is written after that batch is sent, instead of with the source-system id
+- Failed records in a batch are logged with their row and the server's message, and never counted as saved
+- Multi-select choice columns (`OptionSetValueCollection`) export and import correctly
 
-- **Pass 1**: Strip state/owner attributes → records become batchable → imported via CreateMultiple/UpdateMultiple
-- **Pass 2**: Apply state/owner changes in bulk using UpdateMultiple and batch Assign operations
+### Solutions
+- A zip without `solution.xml` fails with a clear `FileNotFoundException`
+- Prerequisite versions are logged after they are resolved
 
-**Performance impact**: the gain is proportional to how much of the block was previously unbatchable. On a dataset where nearly every record carried a state or owner attribute, the batchable share went from a few percent to almost all of it; on a block where no record carries them, the option changes nothing. Enabled via:
+### Logs and the Runner
+- Log lines show values instead of SDK type names, and the record id for blocks matched on the primary key
+- No more `[START of ToString]` noise from the import status poll and record labels
+- Log sections are nested correctly, also after a failed record or solution
+- Log files are named after the definition, operation, connection and time
+- The Runner no longer makes the import wait for its window to repaint, which cost about 15 ms per record
 
-```xml
-<Import Save="CreateUpdate" DeferStateAndOwner="true" BatchSize="100">
+### Export
+- Columns are written in alphabetical order, so re-exporting unchanged data gives no diff
+- Fixed an off-by-one error in text export that could throw `IndexOutOfRangeException`
+
+### Platform
+- .NET Framework 4.8; `ILMerge` removed; `DotNetZip` replaced with `System.IO.Compression`
+
+### Behaviour changes to be aware of
+- **A failed update now counts as Failed**, and stops the run when `StopOnError` is set. It used to be swallowed and counted as Skipped.
+- **`PreRetrieveAll` really reads the whole table** - see above.
+- A match column that is present but empty compares as `<null>` instead of failing the record.
+
+---
+
+## Building and testing
+
+```
+nuget restore Rappen.XTB.Shuffle.sln
+msbuild Rappen.XTB.Shuffle.sln /p:Configuration=Release /p:Platform="Any CPU"
+vstest.console.exe tests\Xrm.Shuffle.Core.Tests\bin\Release\Xrm.Shuffle.Core.Tests.dll /Framework:.NETFramework,Version=v4.8
 ```
 
-This feature is opt-in (default: `false`) to maintain full backwards compatibility. Ideal for environment-to-environment data migrations where preserving record state and ownership is required.
-
-### CreateMultiple/UpdateMultiple bulk operation support
-Import operations now use **CreateMultiple** and **UpdateMultiple** bulk messages on Dataverse (online) for significantly improved performance — up to 2-4× faster than ExecuteMultipleRequest for large datasets. The implementation includes:
-
-- **Runtime capability detection** — queries `sdkmessagefilter` to detect if bulk operations are supported for each entity type
-- **Per-entity caching** — capability checks are cached for the lifetime of the import run
-- **Graceful fallback** — automatically falls back to ExecuteMultipleRequest for on-premises CRM 9.1 or entities that don't support bulk operations
-- **Full backwards compatibility** — works seamlessly with Dynamics CRM 9.1 on-premises and all Dataverse versions
-- **Opt-in** — `BatchSize` defaults to `1`, so existing definitions keep importing record by record until one asks for batching
-
-Capability detection is automatic — the system works out what the target environment supports and selects the best available API. Batching itself is not: set `BatchSize` above `1` on an Import element to turn it on.
-
-### Multi-Select OptionSet support
-Export and import of Multi-Select OptionSet (OptionSetValueCollection) fields now works correctly. Previously, exported data.xml contained the literal string "OptionSetValueCollection" instead of actual values.
-
-### ExecuteMultipleRequest batching (legacy)
-Import operations on on-premises Dynamics CRM 9.1 use `ExecuteMultipleRequest` for batching (Create, Update, Delete operations). Dataverse (online) environments automatically use the newer and faster CreateMultiple/UpdateMultiple APIs instead. Configurable via the `BatchSize` attribute on the Import element (default: 1, i.e. no batching; max: 1000). The Shuffle Builder UI includes a "Batch size" field and a "Defer state and owner" checkbox on the Import node.
-
-### Deterministic XML export ordering
-Entity attributes are now sorted alphabetically during export, eliminating spurious diffs in version control when re-exporting unchanged data.
-
-### Bug fixes and performance improvements
-- Fixed off-by-one error in CSV/text export that could cause an IndexOutOfRangeException
-- Metadata lookups (PrimaryIdAttribute) hoisted out of inner loops to reduce overhead
-- Replaced O(n) list searches with HashSet for attribute deduplication during import
-- Replaced O(n²) attribute filtering in SelectAttributes with single-pass LINQ approach
-- Update failures now log the exception message for easier diagnostics
-- A batch that stops on the first fault no longer counts its unexecuted requests as successes; every failed row is logged with its index and fault message
-- Records whose lookups point at another record still waiting in the batch are no longer written with the source-system id — the batch is flushed first
-- A deferred state or owner change now receives the real id of a record that was created inside a batch, instead of being silently dropped
+`tests/Xrm.Shuffle.Core.Tests` compiles the Shuffle core and
+[Xrm.Utils.Core](https://github.com/rappen/Xrm.Utils.Core) (a submodule) and tests the import
+against a fake organization service that pages results at 5000 like Dataverse. Run it in both
+Debug and Release - Debug sends extra FetchXml conversion requests. CI
+(`.github/workflows/build.yml`) builds and tests both on every push and on pull requests to master; `release.yml` publishes a
+CI run's packages to NuGet, which the XrmToolBox Tool Library reads. See `CLAUDE.md` for the
+code layout and the import strategy in more detail.
 
 ---
 
 ## Home page
 https://jonasr.app/shuffle/
 
-
 ## Articles
 https://jonasr.app/2017/04/devops-i/ <br/>
 These describe the outline of the tools in this repository.
 
 https://saralagerquist.com/2019/12/02/mvp-advent-calendar-transport-data-between-environments-with-saras-favorite-tool/<br/>
-Sara Lagerquist explains an example how to use it.
+Sara Lagerquist explains an example of how to use it.
