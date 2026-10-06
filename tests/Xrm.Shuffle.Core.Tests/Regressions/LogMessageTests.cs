@@ -203,5 +203,21 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Regressions
         }
 
         #endregion Flushes that escape the block
+
+        /// <summary>
+        /// Looking up a table's primary id attribute closed a log section it never opened. It
+        /// runs once per table, so every block shifted the rest of the log one level left and
+        /// the file logger ended with "(no section to end)".
+        /// </summary>
+        [Test]
+        public void A_block_leaves_the_log_sections_balanced()
+        {
+            Online().WithEntity(Seeded("account", Id(101), "Alpha"));
+
+            NewShuffler().TestImportDataBlock(CreateInBatchesOf(10), Sources("Alpha", "Beta"));
+
+            Assert.That(Org.Logger.UnmatchedEnds, Is.EqualTo(0), "an EndSection with no section open. " + DumpAll());
+            Assert.That(Org.Logger.SectionDepth, Is.EqualTo(0), "a section left open: " + string.Join(", ", Org.Logger.OpenSections));
+        }
     }
 }

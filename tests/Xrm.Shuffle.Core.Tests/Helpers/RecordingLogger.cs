@@ -59,7 +59,17 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
             {
                 sections.RemoveAt(sections.Count - 1);
             }
+            else
+            {
+                UnmatchedEnds++;
+            }
         }
+
+        /// <summary>
+        /// EndSection calls that had no open section to end. The product's file logger writes
+        /// "(no section to end)" for each, and every one shifts the rest of the log's nesting.
+        /// </summary>
+        public int UnmatchedEnds { get; private set; }
 
         public void Log(string message)
         {
