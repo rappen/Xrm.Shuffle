@@ -188,6 +188,7 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
             queries.Add(query);
+            Fault("RetrieveMultiple");
             var expression = query as QueryExpression;
             if (expression == null || expression.TopCount.HasValue)
             {

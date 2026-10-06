@@ -219,5 +219,28 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Regressions
             Assert.That(Org.Logger.UnmatchedEnds, Is.EqualTo(0), "an EndSection with no section open. " + DumpAll());
             Assert.That(Org.Logger.SectionDepth, Is.EqualTo(0), "a section left open: " + string.Join(", ", Org.Logger.OpenSections));
         }
+
+        /// <summary>
+        /// A record whose match lookup throws is counted as failed and the import goes on, so
+        /// the sections the lookup opened have to be closed on the way out. They were not, and
+        /// every such record left two open - the rest of the log was mis-nested and the final
+        /// sections were reported under the wrong names. Live, the up-front read failed because
+        /// the source carried an attribute the target table did not have; the fake org accepts
+        /// such a query, so the fault is scripted.
+        /// </summary>
+        [Test]
+        public void A_record_whose_match_lookup_throws_leaves_the_log_sections_balanced()
+        {
+            Online().WithEntity(Seeded("account", Id(101), "Alpha"));
+            Service.ThrowOnce("RetrieveMultiple", ExecuteMultipleResponseBuilder.Faulted(
+                "'Account' entity doesn't contain attribute with Name = 'cint_ledger'"));
+
+            var outcome = NewShuffler().TestImportDataBlock(CreateInBatchesOf(10), Sources("Alpha", "Beta"));
+
+            Assert.That(outcome.Failed, Is.EqualTo(1), "the first record's lookup fails. " + DumpAll());
+            Assert.That(outcome.Created, Is.EqualTo(1), "the second record is still imported. " + DumpAll());
+            Assert.That(Org.Logger.UnmatchedEnds, Is.EqualTo(0), "an EndSection with no section open. " + DumpAll());
+            Assert.That(Org.Logger.SectionDepth, Is.EqualTo(0), "a section left open: " + string.Join(", ", Org.Logger.OpenSections));
+        }
     }
 }

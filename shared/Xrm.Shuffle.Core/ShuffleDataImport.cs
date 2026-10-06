@@ -195,25 +195,31 @@
         private IPreRetrievedMatches GetAllRecordsForMatching(IExecutionContainer container, List<string> allattributes, List<string> matchattributes, Entity cdEntity)
         {
             container.StartSection(MethodBase.GetCurrentMethod().Name);
-            var qMatch = new QueryExpression(cdEntity.LogicalName)
+            try
             {
-                ColumnSet = new ColumnSet(allattributes.ToArray())
-            };
-#if DEBUG
-            container.Log($"Retrieving all records for {cdEntity.LogicalName}:\n{container.ConvertToFetchXml(qMatch)}");
-#endif
-            // RetrieveAll follows the paging cookie. A single RetrieveMultiple stops at 5000
-            // records, and every target record past that looked new, so it was created again.
-            var timer = System.Diagnostics.Stopwatch.StartNew();
-            var records = container.RetrieveAll(qMatch);
-            var matches = new InMemoryPreRetrievedMatches(
-                records.Entities,
-                target => MatchKey(matchattributes, attr => TargetAttributeValue(container, target, attr)),
-                source => MatchKey(matchattributes, attr => SourceAttributeValue(container, source, attr)));
-            timer.Stop();
-            SendLine(container, $"Pre-retrieved {matches.Count} records for matching ({matches.KeyCount} distinct match keys, {timer.ElapsedMilliseconds} ms)");
-            container.EndSection();
-            return matches;
+                var qMatch = new QueryExpression(cdEntity.LogicalName)
+                {
+                    ColumnSet = new ColumnSet(allattributes.ToArray())
+                };
+    #if DEBUG
+                container.Log($"Retrieving all records for {cdEntity.LogicalName}:\n{container.ConvertToFetchXml(qMatch)}");
+    #endif
+                // RetrieveAll follows the paging cookie. A single RetrieveMultiple stops at 5000
+                // records, and every target record past that looked new, so it was created again.
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                var records = container.RetrieveAll(qMatch);
+                var matches = new InMemoryPreRetrievedMatches(
+                    records.Entities,
+                    target => MatchKey(matchattributes, attr => TargetAttributeValue(container, target, attr)),
+                    source => MatchKey(matchattributes, attr => SourceAttributeValue(container, source, attr)));
+                timer.Stop();
+                SendLine(container, $"Pre-retrieved {matches.Count} records for matching ({matches.KeyCount} distinct match keys, {timer.ElapsedMilliseconds} ms)");
+                return matches;
+            }
+            finally
+            {
+                container.EndSection();
+            }
         }
 
         private List<string> GetMatchAttributes(DataBlockImportMatch match)
@@ -237,78 +243,90 @@
         private EntityCollection GetMatchingRecords(IExecutionContainer container, Entity cdEntity, List<string> matchattributes, List<string> updateattributes, bool preretrieveall, ref IPreRetrievedMatches cAllRecordsToMatch)
         {
             container.StartSection(MethodBase.GetCurrentMethod().Name);
-            EntityCollection matches = null;
-            var allattributes = new List<string>
+            try
             {
-                container.Entity(cdEntity.LogicalName).PrimaryIdAttribute
-            };
-            if (cdEntity.Contains("ownerid"))
-            {
-                allattributes.Add("ownerid");
-            }
-            if (cdEntity.Contains("statecode") || cdEntity.Contains("statuscode"))
-            {
-                allattributes.Add("statecode");
-                allattributes.Add("statuscode");
-            }
-            allattributes = allattributes.Union(matchattributes.Union(updateattributes)).ToList();
-            if (preretrieveall)
-            {
-                if (cAllRecordsToMatch == null)
+                EntityCollection matches = null;
+                var allattributes = new List<string>
                 {
-                    cAllRecordsToMatch = GetAllRecordsForMatching(container, allattributes, matchattributes, cdEntity);
-                }
-                matches = GetMatchingRecordsFromPreRetrieved(container, cdEntity, cAllRecordsToMatch);
-            }
-            else
-            {
-                var qMatch = new QueryExpression(cdEntity.LogicalName)
-                {
-                    // We need to be able to see if any attributes have changed, so lets make sure matching records have all the attributes that will be updated
-                    ColumnSet = new ColumnSet(allattributes.ToArray())
+                    container.Entity(cdEntity.LogicalName).PrimaryIdAttribute
                 };
-
-                foreach (var matchattr in matchattributes)
+                if (cdEntity.Contains("ownerid"))
                 {
-                    object value = null;
-                    if (cdEntity.Contains(matchattr))
-                    {
-                        value = container.AttributeAsBaseType(cdEntity, matchattr, null, false);
-                    }
-                    else if (matchattr == container.Entity(cdEntity.LogicalName).PrimaryIdAttribute)
-                    {
-                        value = cdEntity.Id;
-                    }
-                    if (value != null)
-                    {
-                        Query.AppendCondition(qMatch.Criteria, LogicalOperator.And, matchattr, Microsoft.Xrm.Sdk.Query.ConditionOperator.Equal, value);
-                    }
-                    else
-                    {
-                        Query.AppendCondition(qMatch.Criteria, LogicalOperator.And, matchattr, Microsoft.Xrm.Sdk.Query.ConditionOperator.Null, null);
-                    }
+                    allattributes.Add("ownerid");
                 }
-#if DEBUG
-                container.Log($"Finding matches for {cdEntity.LogicalName}:\n{container.ConvertToFetchXml(qMatch)}");
-#endif
-                matches = container.RetrieveMultiple(qMatch);
+                if (cdEntity.Contains("statecode") || cdEntity.Contains("statuscode"))
+                {
+                    allattributes.Add("statecode");
+                    allattributes.Add("statuscode");
+                }
+                allattributes = allattributes.Union(matchattributes.Union(updateattributes)).ToList();
+                if (preretrieveall)
+                {
+                    if (cAllRecordsToMatch == null)
+                    {
+                        cAllRecordsToMatch = GetAllRecordsForMatching(container, allattributes, matchattributes, cdEntity);
+                    }
+                    matches = GetMatchingRecordsFromPreRetrieved(container, cdEntity, cAllRecordsToMatch);
+                }
+                else
+                {
+                    var qMatch = new QueryExpression(cdEntity.LogicalName)
+                    {
+                        // We need to be able to see if any attributes have changed, so lets make sure matching records have all the attributes that will be updated
+                        ColumnSet = new ColumnSet(allattributes.ToArray())
+                    };
+
+                    foreach (var matchattr in matchattributes)
+                    {
+                        object value = null;
+                        if (cdEntity.Contains(matchattr))
+                        {
+                            value = container.AttributeAsBaseType(cdEntity, matchattr, null, false);
+                        }
+                        else if (matchattr == container.Entity(cdEntity.LogicalName).PrimaryIdAttribute)
+                        {
+                            value = cdEntity.Id;
+                        }
+                        if (value != null)
+                        {
+                            Query.AppendCondition(qMatch.Criteria, LogicalOperator.And, matchattr, Microsoft.Xrm.Sdk.Query.ConditionOperator.Equal, value);
+                        }
+                        else
+                        {
+                            Query.AppendCondition(qMatch.Criteria, LogicalOperator.And, matchattr, Microsoft.Xrm.Sdk.Query.ConditionOperator.Null, null);
+                        }
+                    }
+    #if DEBUG
+                    container.Log($"Finding matches for {cdEntity.LogicalName}:\n{container.ConvertToFetchXml(qMatch)}");
+    #endif
+                    matches = container.RetrieveMultiple(qMatch);
+                }
+                return matches;
             }
-            container.EndSection();
-            return matches;
+            finally
+            {
+                container.EndSection();
+            }
         }
 
         private EntityCollection GetMatchingRecordsFromPreRetrieved(IExecutionContainer container, Entity cdEntity, IPreRetrievedMatches cAllRecordsToMatch)
         {
             container.StartSection(MethodBase.GetCurrentMethod().Name);
-            container.Log($"Searching matches for: {cdEntity.Id} {cdEntity.LogicalName}");
-            var result = cAllRecordsToMatch.Find(cdEntity);
-            foreach (var cdRecord in result.Entities)
+            try
             {
-                container.Log($"Found match: {cdRecord.Id} {cdRecord.LogicalName}");
+                container.Log($"Searching matches for: {cdEntity.Id} {cdEntity.LogicalName}");
+                var result = cAllRecordsToMatch.Find(cdEntity);
+                foreach (var cdRecord in result.Entities)
+                {
+                    container.Log($"Found match: {cdRecord.Id} {cdRecord.LogicalName}");
+                }
+                container.Log($"Returned matches: {result.Count()}");
+                return result;
             }
-            container.Log($"Returned matches: {result.Count()}");
-            container.EndSection();
-            return result;
+            finally
+            {
+                container.EndSection();
+            }
         }
 
         private List<string> GetUpdateAttributes(EntityCollection entities)
@@ -822,112 +840,118 @@
         private bool SaveEntity(IExecutionContainer container, Entity cdNewEntity, Entity cdMatchEntity, bool updateInactiveRecord, bool updateIdentical, int pos, string identifier)
         {
             container.StartSection("SaveEntity " + pos.ToString("000 ") + identifier);
-            var recordSaved = false;
-            if (string.IsNullOrWhiteSpace(identifier))
+            try
             {
-                identifier = cdNewEntity.ToString();
-            }
-            var newOwner = cdNewEntity.GetAttribute<EntityReference>("ownerid", null);
-            var newState = cdNewEntity.GetAttribute<OptionSetValue>("statecode", null);
-            var newStatus = cdNewEntity.GetAttribute<OptionSetValue>("statuscode", null);
-            var newActive = newState != null ? container.GetActiveStates(cdNewEntity.LogicalName).Contains(newState.Value) : true;
-            var nowActive = true;
-            if ((newState == null) != (newStatus == null))
-            {
-                throw new InvalidDataException("When setting status of the record, both statecode and statuscode must be present");
-            }
-            if (!newActive)
-            {
-                container.Log("Removing state+status from entity to update");
-                cdNewEntity.RemoveAttribute("statecode");
-                cdNewEntity.RemoveAttribute("statuscode");
-            }
-            if (cdMatchEntity == null)
-            {
-                container.Create(cdNewEntity);
-                recordSaved = true;
-                SendLine(container, "{0:000} Created: {1}", pos, identifier);
-            }
-            else
-            {
-                var oldState = cdMatchEntity.GetAttribute<OptionSetValue>("statecode", null);
-                var oldActive = oldState != null ? container.GetActiveStates(cdNewEntity.LogicalName).Contains(oldState.Value) : true;
-                nowActive = oldActive;
-                cdNewEntity.Id = cdMatchEntity.Id;
-                if (!oldActive && (newActive || updateInactiveRecord))
-                {   // Inaktiv post som ska aktiveras eller uppdateras
-                    container.SetState(cdNewEntity, 0, 1);
-                    SendLine(container, "{0:000} Activated: {1} for update", pos, identifier);
-                    nowActive = true;
-                }
-
-                if (nowActive)
+                var recordSaved = false;
+                if (string.IsNullOrWhiteSpace(identifier))
                 {
-                    var primaryIdAttribute = container.Entity(cdNewEntity.LogicalName).PrimaryIdAttribute;
-                    var updateattributes = cdNewEntity.Attributes.Keys.ToList();
-                    if (updateattributes.Contains(primaryIdAttribute))
-                    {
-                        updateattributes.Remove(primaryIdAttribute);
+                    identifier = cdNewEntity.ToString();
+                }
+                var newOwner = cdNewEntity.GetAttribute<EntityReference>("ownerid", null);
+                var newState = cdNewEntity.GetAttribute<OptionSetValue>("statecode", null);
+                var newStatus = cdNewEntity.GetAttribute<OptionSetValue>("statuscode", null);
+                var newActive = newState != null ? container.GetActiveStates(cdNewEntity.LogicalName).Contains(newState.Value) : true;
+                var nowActive = true;
+                if ((newState == null) != (newStatus == null))
+                {
+                    throw new InvalidDataException("When setting status of the record, both statecode and statuscode must be present");
+                }
+                if (!newActive)
+                {
+                    container.Log("Removing state+status from entity to update");
+                    cdNewEntity.RemoveAttribute("statecode");
+                    cdNewEntity.RemoveAttribute("statuscode");
+                }
+                if (cdMatchEntity == null)
+                {
+                    container.Create(cdNewEntity);
+                    recordSaved = true;
+                    SendLine(container, "{0:000} Created: {1}", pos, identifier);
+                }
+                else
+                {
+                    var oldState = cdMatchEntity.GetAttribute<OptionSetValue>("statecode", null);
+                    var oldActive = oldState != null ? container.GetActiveStates(cdNewEntity.LogicalName).Contains(oldState.Value) : true;
+                    nowActive = oldActive;
+                    cdNewEntity.Id = cdMatchEntity.Id;
+                    if (!oldActive && (newActive || updateInactiveRecord))
+                    {   // Inaktiv post som ska aktiveras eller uppdateras
+                        container.SetState(cdNewEntity, 0, 1);
+                        SendLine(container, "{0:000} Activated: {1} for update", pos, identifier);
+                        nowActive = true;
                     }
-                    if (updateIdentical || !EntityAttributesEqual(container, updateattributes, cdNewEntity, cdMatchEntity))
+
+                    if (nowActive)
                     {
-                        try
+                        var primaryIdAttribute = container.Entity(cdNewEntity.LogicalName).PrimaryIdAttribute;
+                        var updateattributes = cdNewEntity.Attributes.Keys.ToList();
+                        if (updateattributes.Contains(primaryIdAttribute))
                         {
-                            container.Update(cdNewEntity);
-                            recordSaved = true;
-                            SendLine(container, "{0:000} Updated: {1}", pos, identifier);
+                            updateattributes.Remove(primaryIdAttribute);
                         }
-                        catch (Exception ex)
+                        if (updateIdentical || !EntityAttributesEqual(container, updateattributes, cdNewEntity, cdMatchEntity))
                         {
-                            recordSaved = false;
-                            SendLine(container, "{0:000} Update Failed: {1} {2} {3}", pos, identifier, cdNewEntity.LogicalName, ex.Message);
+                            try
+                            {
+                                container.Update(cdNewEntity);
+                                recordSaved = true;
+                                SendLine(container, "{0:000} Updated: {1}", pos, identifier);
+                            }
+                            catch (Exception ex)
+                            {
+                                recordSaved = false;
+                                SendLine(container, "{0:000} Update Failed: {1} {2} {3}", pos, identifier, cdNewEntity.LogicalName, ex.Message);
+                            }
+                        }
+                        else
+                        {
+                            SendLine(container, "{0:000} Skipped: {1} (Identical)", pos, identifier);
                         }
                     }
                     else
                     {
-                        SendLine(container, "{0:000} Skipped: {1} (Identical)", pos, identifier);
+                        SendLine(container, "{0:000} Inactive: {1}", pos, identifier);
+                    }
+                    if (newOwner != null && !newOwner.Equals(cdMatchEntity.GetAttribute("ownerid", new EntityReference())))
+                    {
+                        container.Principal(cdNewEntity).On(newOwner).Assign();
+
+                        // cdNewEntity.Assign(newOwner);
+                        SendLine(container, "{0:000} Assigned: {1} to {2} {3}", pos, identifier, newOwner.LogicalName, string.IsNullOrEmpty(newOwner.Name) ? newOwner.Id.ToString() : newOwner.Name);
                     }
                 }
-                else
-                {
-                    SendLine(container, "{0:000} Inactive: {1}", pos, identifier);
-                }
-                if (newOwner != null && !newOwner.Equals(cdMatchEntity.GetAttribute("ownerid", new EntityReference())))
-                {
-                    container.Principal(cdNewEntity).On(newOwner).Assign();
-
-                    // cdNewEntity.Assign(newOwner);
-                    SendLine(container, "{0:000} Assigned: {1} to {2} {3}", pos, identifier, newOwner.LogicalName, string.IsNullOrEmpty(newOwner.Name) ? newOwner.Id.ToString() : newOwner.Name);
-                }
-            }
-            if (newActive != nowActive)
-            {   // Active should be changed on the record
-                var newStatusValue = newStatus.Value;
-                if (cdNewEntity.LogicalName == "savedquery" && newState.Value == 1 && newStatusValue == 1)
-                {   // Adjustment for inactive but unpublished view
-                    newStatusValue = 2;
-                }
-                if (cdNewEntity.LogicalName == "duplicaterule")
-                {
-                    if (newStatusValue == 2)
+                if (newActive != nowActive)
+                {   // Active should be changed on the record
+                    var newStatusValue = newStatus.Value;
+                    if (cdNewEntity.LogicalName == "savedquery" && newState.Value == 1 && newStatusValue == 1)
+                    {   // Adjustment for inactive but unpublished view
+                        newStatusValue = 2;
+                    }
+                    if (cdNewEntity.LogicalName == "duplicaterule")
                     {
-                        container.PublishDuplicateRule(cdNewEntity);
-                        SendLine(container, "{0:000} Publish Duplicate Rule: {1}", pos, identifier);
+                        if (newStatusValue == 2)
+                        {
+                            container.PublishDuplicateRule(cdNewEntity);
+                            SendLine(container, "{0:000} Publish Duplicate Rule: {1}", pos, identifier);
+                        }
+                        else
+                        {
+                            container.UnpublishDuplicateRule(cdNewEntity);
+                            SendLine(container, "{0:000} Unpublish Duplicate Rule: {1}", pos, identifier);
+                        }
                     }
                     else
                     {
-                        container.UnpublishDuplicateRule(cdNewEntity);
-                        SendLine(container, "{0:000} Unpublish Duplicate Rule: {1}", pos, identifier);
+                        container.SetState(cdNewEntity, newState.Value, newStatusValue);
+                        SendLine(container, "{0:000} SetState: {1}: {2}/{3}", pos, identifier, newState.Value, newStatus.Value);
                     }
                 }
-                else
-                {
-                    container.SetState(cdNewEntity, newState.Value, newStatusValue);
-                    SendLine(container, "{0:000} SetState: {1}: {2}/{3}", pos, identifier, newState.Value, newStatus.Value);
-                }
+                return recordSaved;
             }
-            container.EndSection();
-            return recordSaved;
+            finally
+            {
+                container.EndSection();
+            }
         }
 
         #region Batch Helpers
