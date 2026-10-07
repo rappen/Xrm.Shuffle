@@ -296,7 +296,7 @@ creates each record and updates it if it already exists.
 - **`PreRetrieveAll` really reads the whole table** - see above.
 - A match column that is present but empty compares as `<null>` instead of failing the record.
 - **Numbers and dates in data files no longer follow the machine's culture.** New exports write `1234.5`. An older file written with commas (`1234,5`) is still imported on a machine that uses a decimal comma; on any other machine that value is now rejected with an error, where it used to be read as `12345`.
-- Imported dates are passed on as UTC instead of the importing machine's local time - the same moment, independent of the machine's time zone.
+- Dates are written as `2026-10-05T12:30:00.0000000Z` instead of the machine's date format. They are read exactly as before, so existing data files import their dates unchanged.
 
 ---
 

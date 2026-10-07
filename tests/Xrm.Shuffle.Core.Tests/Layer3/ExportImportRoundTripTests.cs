@@ -91,6 +91,17 @@
             return ShuffleHelper.LoadDataFile(file);
         }
 
+        /// <summary>
+        /// The moment Shuffle sent for lastusedincampaign, read from the create request. The fake
+        /// org stores a local DateTime's clock time marked as UTC, which the platform does not, so
+        /// the stored row would show the importing machine's offset.
+        /// </summary>
+        private static DateTime SentDate(ShuffleTestContext target)
+        {
+            var sent = target.Service.Created.Single(e => e.LogicalName == "account");
+            return sent.GetAttributeValue<DateTime>("lastusedincampaign").ToUniversalTime();
+        }
+
         private static ShuffleTestContext EmptyTarget()
         {
             return ShuffleTestContext.AsOnline()
@@ -125,7 +136,7 @@
             Assert.That(Convert.ToDouble(account["address1_latitude"]), Is.EqualTo(59.33).Within(1e-9), "double");
             Assert.That(account["donotemail"], Is.EqualTo(true), "bool");
             Assert.That(account.GetAttributeValue<OptionSetValue>("industrycode")?.Value, Is.EqualTo(7), "OptionSetValue");
-            Assert.That(account.GetAttributeValue<DateTime>("lastusedincampaign").ToUniversalTime(), Is.EqualTo(LastUsed), "DateTime");
+            Assert.That(SentDate(target), Is.EqualTo(LastUsed), "DateTime");
             var reference = account.GetAttributeValue<EntityReference>("primarycontactid");
             Assert.That(reference?.LogicalName, Is.EqualTo("contact"), "EntityReference entity");
             Assert.That(reference?.Id, Is.EqualTo(ContactId), "EntityReference id");
@@ -157,7 +168,7 @@
                 Assert.That(account.GetAttributeValue<Money>("revenue")?.Value, Is.EqualTo(1234.5m), "Money");
                 Assert.That(account["exchangerate"], Is.EqualTo(1.25m), "decimal");
                 Assert.That(Convert.ToDouble(account["address1_latitude"]), Is.EqualTo(59.33).Within(1e-9), "double");
-                Assert.That(account.GetAttributeValue<DateTime>("lastusedincampaign").ToUniversalTime(), Is.EqualTo(LastUsed), "DateTime");
+                Assert.That(SentDate(target), Is.EqualTo(LastUsed), "DateTime");
             }
             finally
             {
