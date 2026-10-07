@@ -29,6 +29,7 @@ Import
 - PreRetrieveAll matching is a single lookup per record instead of a scan of the whole table.
 - Failed records in a batch are logged with row and server message, and never counted as saved.
 - Multi-select choice columns (OptionSetValueCollection) export and import correctly.
+- Floating point (Double) columns can be imported from every format, not only Full.
 
 Runner
 - The import no longer waits for the window to repaint after every record, which made large blocks several times slower.
@@ -38,6 +39,8 @@ Logs
 - Log files are named after the definition, operation, connection and time.
 
 Export
+- Exports are complete: every export query stopped at 5000 records; filter, FetchXML and intersect exports now read every page.
+- Data files are culture-independent: numbers are written as 1234.5 and dates in round-trip format on every machine.
 - Columns are written in alphabetical order, so re-exports give clean diffs.
 - Fixed an off-by-one error in text export.
 
@@ -50,6 +53,7 @@ Platform
 Behaviour changes
 - A failed update now counts as Failed (it was counted as Skipped) and stops the run with StopOnError.
 - PreRetrieveAll reads the whole target table; avoid it on very large tables.
+- Numbers in data files no longer follow the machine's culture. Older files written with a decimal comma still import on a machine that uses one; elsewhere such a value is rejected instead of read as a larger number.
 
 Full details: https://github.com/rappen/Xrm.Shuffle#whats-new-since-120235
 		</releaseNotes>

@@ -6,6 +6,7 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
     using FakeXrmEasy;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Messages;
+    using Microsoft.Xrm.Sdk.Metadata;
     using Microsoft.Xrm.Sdk.Query;
 
     /// <summary>
@@ -41,6 +42,7 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
         private static readonly string[] BulkMessages = { "CreateMultiple", "UpdateMultiple", "UpsertMultiple" };
 
         private readonly IOrganizationService inner;
+        private readonly XrmFakedContext faked;
         private readonly List<OrganizationRequest> requests = new List<OrganizationRequest>();
         private readonly List<Entity> created = new List<Entity>();
         private readonly List<Entity> updated = new List<Entity>();
@@ -58,6 +60,7 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
             {
                 throw new ArgumentNullException("faked");
             }
+            this.faked = faked;
             inner = faked.GetOrganizationService();
         }
 
@@ -178,26 +181,101 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
             return inner.Retrieve(entityName, id, columnSet);
         }
 
+        private readonly Dictionary<string, Dictionary<string, AttributeTypeCode>> attributeTypes =
+            new Dictionary<string, Dictionary<string, AttributeTypeCode>>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Declares a column's type for RetrieveMetadataChangesRequest, which the fake org does not
+        /// implement. The export asks for it to build a Relation filter.
+        /// </summary>
+        public RecordingOrganizationService WithAttributeType(string entityLogicalName, string attribute, AttributeTypeCode type)
+        {
+            if (!attributeTypes.TryGetValue(entityLogicalName, out var types))
+            {
+                types = new Dictionary<string, AttributeTypeCode>(StringComparer.Ordinal);
+                attributeTypes[entityLogicalName] = types;
+            }
+            types[attribute] = type;
+            return this;
+        }
+
+        private OrganizationResponse AnswerAttributeTypes(RetrieveMetadataChangesRequest request)
+        {
+            var entityName = request.Query.Criteria.Conditions
+                .Where(c => c.PropertyName == "LogicalName")
+                .Select(c => c.Value as string)
+                .FirstOrDefault();
+            var collection = new EntityMetadataCollection();
+            if (entityName != null && attributeTypes.TryGetValue(entityName, out var types))
+            {
+                var entity = new EntityMetadata { LogicalName = entityName };
+                var attributes = types.Select(t =>
+                {
+                    var attribute = new StringAttributeMetadata { LogicalName = t.Key };
+                    SetNonPublic(attribute, "AttributeType", (AttributeTypeCode?)t.Value);
+                    return (AttributeMetadata)attribute;
+                }).ToArray();
+                SetNonPublic(entity, "Attributes", attributes);
+                collection.Add(entity);
+            }
+            var response = new RetrieveMetadataChangesResponse();
+            response.Results["EntityMetadata"] = collection;
+            response.Results["ServerVersionStamp"] = "1";
+            response.Results["DeletedMetadata"] = null;
+            return response;
+        }
+
+        private static void SetNonPublic(object target, string property, object value) =>
+            target.GetType().GetProperty(property).GetSetMethod(true).Invoke(target, new[] { value });
+
         /// <summary>The most records Dataverse returns from one RetrieveMultiple.</summary>
         public const int MaxPageSize = 5000;
 
         /// <summary>
-        /// Pages a QueryExpression the way Dataverse does. Without this the fake returns every
-        /// row at once, and a caller that never follows the paging cookie looks correct.
+        /// Pages a query the way Dataverse does. Without this the fake returns every row at once,
+        /// and a caller that never follows the paging cookie looks correct. FetchXML is translated
+        /// to a QueryExpression and paged by its page and count attributes.
         /// </summary>
         public EntityCollection RetrieveMultiple(QueryBase query)
         {
             queries.Add(query);
             Fault("RetrieveMultiple");
+            if (query is FetchExpression fetch)
+            {
+                return RetrievePagedFetch(fetch);
+            }
             var expression = query as QueryExpression;
             if (expression == null || expression.TopCount.HasValue)
             {
                 return inner.RetrieveMultiple(query);
             }
+            return RetrievePaged(expression, expression.PageInfo);
+        }
 
-            var pageInfo = expression.PageInfo;
+        private EntityCollection RetrievePagedFetch(FetchExpression fetch)
+        {
+            var xml = new System.Xml.XmlDocument();
+            xml.LoadXml(fetch.Query);
+            var xFetch = xml.DocumentElement;
+            if (xFetch.HasAttribute("top") || xFetch.GetAttribute("aggregate") == "true")
+            {
+                return inner.RetrieveMultiple(fetch);
+            }
+            int.TryParse(xFetch.GetAttribute("page"), out var page);
+            int.TryParse(xFetch.GetAttribute("count"), out var count);
+            foreach (var paging in new[] { "page", "count", "paging-cookie" })
+            {
+                xFetch.RemoveAttribute(paging);
+            }
+            var expression = XrmFakedContext.TranslateFetchXmlToQueryExpression(faked, xml.OuterXml);
+            return RetrievePaged(expression, new PagingInfo { PageNumber = page, Count = count });
+        }
+
+        private EntityCollection RetrievePaged(QueryExpression expression, PagingInfo pageInfo)
+        {
             var size = pageInfo != null && pageInfo.Count > 0 ? Math.Min(pageInfo.Count, MaxPageSize) : MaxPageSize;
             var number = pageInfo != null && pageInfo.PageNumber > 0 ? pageInfo.PageNumber : 1;
+            var originalPageInfo = expression.PageInfo;
             var all = new List<Entity>();
             string entityName = null;
             try
@@ -218,7 +296,7 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
             }
             finally
             {
-                expression.PageInfo = pageInfo;
+                expression.PageInfo = originalPageInfo;
             }
 
             var page = new EntityCollection(all.Skip((number - 1) * size).Take(size).ToList())
@@ -235,6 +313,11 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
             if (FetchXmlConversion.IsConversion(request))
             {
                 return FetchXmlConversion.Answer(request);
+            }
+            if (request is RetrieveMetadataChangesRequest metadataRequest)
+            {
+                requests.Add(request);
+                return AnswerAttributeTypes(metadataRequest);
             }
 
             requests.Add(request);

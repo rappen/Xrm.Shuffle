@@ -269,6 +269,7 @@ creates each record and updates it if it already exists.
 - A record whose lookups point at a record still waiting in the batch is written after that batch is sent, instead of with the source-system id
 - Failed records in a batch are logged with their row and the server's message, and never counted as saved
 - Multi-select choice columns (`OptionSetValueCollection`) export and import correctly
+- Floating point (`Double`) columns can be imported from every format, not only Full
 
 ### Solutions
 - A zip without `solution.xml` fails with a clear `FileNotFoundException`
@@ -282,6 +283,8 @@ creates each record and updates it if it already exists.
 - The Runner no longer makes the import wait for its window to repaint, which cost about 15 ms per record
 
 ### Export
+- **Exports are complete.** Every export query stopped at 5000 records, so larger tables were cut off without a warning; all three - filter, FetchXML and intersect - now read every page
+- **Data files are culture-independent.** Numbers are written as `1234.5` and dates as `2026-10-05T12:30:00.0000000Z` on every machine, so a file exported on one machine imports correctly on another
 - Columns are written in alphabetical order, so re-exporting unchanged data gives no diff
 - Fixed an off-by-one error in text export that could throw `IndexOutOfRangeException`
 
@@ -292,6 +295,8 @@ creates each record and updates it if it already exists.
 - **A failed update now counts as Failed**, and stops the run when `StopOnError` is set. It used to be swallowed and counted as Skipped.
 - **`PreRetrieveAll` really reads the whole table** - see above.
 - A match column that is present but empty compares as `<null>` instead of failing the record.
+- **Numbers and dates in data files no longer follow the machine's culture.** New exports write `1234.5`. An older file written with commas (`1234,5`) is still imported on a machine that uses a decimal comma; on any other machine that value is now rejected with an error, where it used to be read as `12345`.
+- Imported dates are passed on as UTC instead of the importing machine's local time - the same moment, independent of the machine's time zone.
 
 ---
 
@@ -304,8 +309,11 @@ vstest.console.exe tests\Xrm.Shuffle.Core.Tests\bin\Release\Xrm.Shuffle.Core.Tes
 ```
 
 `tests/Xrm.Shuffle.Core.Tests` compiles the Shuffle core and
-[Xrm.Utils.Core](https://github.com/rappen/Xrm.Utils.Core) (a submodule) and tests the import
-against a fake organization service that pages results at 5000 like Dataverse. Run it in both
+[Xrm.Utils.Core](https://github.com/rappen/Xrm.Utils.Core) (a submodule) and tests them against a
+fake organization service that pages results at 5000 like Dataverse: the import engine, data
+export, solution import decisions, export-and-import round trips in every serialization style
+and across cultures, and the Xrm.Utils.Core value helpers. The XrmToolBox user interfaces are
+not covered. Run it in both
 Debug and Release - Debug sends extra FetchXml conversion requests. CI
 (`.github/workflows/build.yml`) builds and tests both on every push and on pull requests to master; `release.yml` publishes a
 CI run's packages to NuGet, which the XrmToolBox Tool Library reads. See `CLAUDE.md` for the

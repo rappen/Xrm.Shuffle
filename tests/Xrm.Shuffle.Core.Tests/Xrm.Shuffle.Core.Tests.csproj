@@ -66,6 +66,8 @@
     <Compile Include="Layer1\BulkMessageFallbackTests.cs" />
     <Compile Include="Layer1\BulkMessageRoutingTests.cs" />
     <Compile Include="Layer1\UpdateAndDeletePairingTests.cs" />
+    <Compile Include="Layer1\AttributeAsStringTests.cs" />
+    <Compile Include="Layer1\ValueTextTests.cs" />
     <Compile Include="Layer2\BatchabilityTests.cs" />
     <Compile Include="Layer2\CapabilityDetectionTests.cs" />
     <Compile Include="Layer2\ExportAttributeSelectionTests.cs" />
@@ -73,9 +75,12 @@
     <Compile Include="Layer2\PreRetrievedMatchingTests.cs" />
     <Compile Include="Layer2\SkipIdenticalTests.cs" />
     <Compile Include="Layer2\UpsertGateTests.cs" />
+    <Compile Include="Layer2\SolutionImportTests.cs" />
+    <Compile Include="Layer2\DataExportTests.cs" />
     <Compile Include="Layer3\DeferStateAndOwnerTests.cs" />
     <Compile Include="Layer3\GuidRemappingTests.cs" />
     <Compile Include="Layer3\PendingCreateReferenceTests.cs" />
+    <Compile Include="Layer3\ExportImportRoundTripTests.cs" />
     <Compile Include="Regressions\BatchErrorReportingTests.cs" />
     <Compile Include="Regressions\LogMessageTests.cs" />
     <Compile Include="Regressions\SendTextFormattingTests.cs" />

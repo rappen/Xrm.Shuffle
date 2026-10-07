@@ -302,7 +302,7 @@
 #if DEBUG
                     container.Log($"FetchXML:\n{fetchxml}");
 #endif
-                    cExportEntities = container.RetrieveMultiple(new FetchExpression(fetchxml));
+                    cExportEntities = container.RetrieveAll(new FetchExpression(fetchxml));
 
                     container.EndSection();
                 }
@@ -357,7 +357,9 @@
                         container.Log(ex);
                     }
 #endif
-                    cExportEntities = container.RetrieveMultiple(qExport);
+                    // RetrieveAll follows the paging cookie: a single RetrieveMultiple stops at
+                    // 5000 records, which cut larger tables off without a word.
+                    cExportEntities = container.RetrieveAll(qExport);
                     if (allcolumns)
                     {
                         SelectAttributes(container, cExportEntities, lAttributes, lNullAttributes);
@@ -391,7 +393,7 @@
                     container.Log($"Exporting intersect entity {block.Entity}\n{fetch}");
 #endif
                     var qExport = new FetchExpression(fetch);
-                    cExportEntities = container.RetrieveMultiple(qExport);
+                    cExportEntities = container.RetrieveAll(qExport);
                     foreach (var entity in cExportEntities.Entities)
                     {
                         var newattributes = new List<KeyValuePair<string, object>>();

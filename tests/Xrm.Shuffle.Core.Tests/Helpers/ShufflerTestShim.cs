@@ -472,5 +472,23 @@ namespace Cinteros.Crm.Utils.Shuffle
 
         /// <summary>Sends a bare newline - the case the length guard in SendText drops.</summary>
         public void TestSendBlankLine() => SendLine(container);
+
+        /// <summary>Decides whether a solution import is a create, an update or a skip.</summary>
+        internal Types.SolutionImportConditions TestCheckIfImportRequired(Types.SolutionBlockImport import, string name, Version version) =>
+            CheckIfImportRequired(container, import, name, version);
+
+        /// <summary>Checks a solution import's prerequisites; throws when one is not met.</summary>
+        public void TestValidatePreReqs(Types.SolutionBlockImport import, Version version) =>
+            ValidatePreReqs(container, import, version);
+
+        /// <summary>
+        /// Reads the version from a solution zip. <paramref name="workFolder"/> stands in for the
+        /// definition's folder, where the method unpacks solution.xml.
+        /// </summary>
+        public Version TestExtractVersionFromSolutionZip(string zipFile, string workFolder)
+        {
+            definitionPath = workFolder;
+            return ExtractVersionFromSolutionZip(zipFile);
+        }
     }
 }

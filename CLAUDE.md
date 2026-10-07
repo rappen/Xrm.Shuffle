@@ -34,8 +34,11 @@ exercises calls Release never makes - and Visual Studio Test Explorer defaults t
 Debug. `.github/workflows/build.yml` builds and tests both, and fails the build on a
 red test in either.
 
-Everything outside that project - solution import and export, data export, and anything
-that needs a live org - is still validated manually.
+The suite covers the import engine, data export (column selection, filters, sort, relations,
+FetchXML, paging), the solution import decisions (zip version, prerequisites, create/update/skip),
+export-and-import round trips in every serialization style and across cultures, and the
+Xrm.Utils.Core value helpers. The actual solution import and export calls, and the XrmToolBox UIs,
+need a live org and are still validated manually.
 
 To produce NuGet packages:
 ```bash
