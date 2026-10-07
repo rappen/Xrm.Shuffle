@@ -2,9 +2,11 @@
 using Cinteros.Crm.Utils.Shuffle.Types;
 using Xrm.Utils.Core.Common.Extensions;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Windows.Forms;
 using System.Xml;
 using XrmToolBox.Extensibility;
@@ -20,6 +22,15 @@ namespace Rappen.XTB.Shuffle.Runner
         private AppInsights ai = new AppInsights(aiEndpoint, aiKey, Assembly.GetExecutingAssembly(), "Shuffle Runner");
         private bool shuffeling = false;
         private bool datafilerequired = true;
+
+        // Log lines and progress raised by the shuffle on its worker thread, waiting for the UI
+        // thread. Applying them with a synchronous Invoke per event made the import wait on the
+        // screen - about 15 ms a record, most of a 14,656-record block that had nothing to write.
+        private readonly ConcurrentQueue<KeyValuePair<string, bool>> pendingLog = new ConcurrentQueue<KeyValuePair<string, bool>>();
+        private readonly object progressLock = new object();
+        private int progressBlocks = -1, progressBlockNo = -1, progressItems = -1, progressItemNo = -1;
+        private bool progressChanged;
+        private int uiUpdateScheduled;
 
         public string RepositoryName => "Xrm.Shuffle";
 
@@ -232,61 +243,108 @@ namespace Rappen.XTB.Shuffle.Runner
             }
             if (text == "" || !string.IsNullOrWhiteSpace(text.Trim()))
             {
-                MethodInvoker mi = delegate
-                {
-                    if (replace && lbLog.Items.Count > 0)
-                    {
-                        lbLog.Items[lbLog.Items.Count - 1] = text;
-                    }
-                    else
-                    {
-                        lbLog.Items.Add(text);
-                    }
-                    lbLog.SelectedIndex = lbLog.Items.Count - 1;
-                };
-                if (InvokeRequired)
-                {
-                    Invoke(mi);
-                }
-                else
-                {
-                    mi();
-                }
+                pendingLog.Enqueue(new KeyValuePair<string, bool>(text, replace));
+                ScheduleUiUpdate();
             }
         }
 
         private void UpdateProgressBars(ShuffleEventArgs e)
         {
-            if (e.Counters.Blocks >= 0 && e.Counters.BlockNo >= 0)
+            var changed = false;
+            lock (progressLock)
             {
-                MethodInvoker mi = delegate
+                if (e.Counters.Blocks >= 0 && e.Counters.BlockNo >= 0)
                 {
-                    pbBlocks.Maximum = e.Counters.Blocks;
-                    pbBlocks.Value = e.Counters.BlockNo;
-                };
-                if (InvokeRequired)
-                {
-                    Invoke(mi);
+                    progressBlocks = e.Counters.Blocks;
+                    progressBlockNo = e.Counters.BlockNo;
+                    changed = true;
                 }
-                else
+                if (e.Counters.Items >= 0 && e.Counters.ItemNo >= 0)
                 {
-                    mi();
+                    progressItems = e.Counters.Items;
+                    progressItemNo = e.Counters.ItemNo;
+                    changed = true;
+                }
+                progressChanged |= changed;
+            }
+            if (changed)
+            {
+                ScheduleUiUpdate();
+            }
+        }
+
+        /// <summary>
+        /// Applies the pending log lines and progress on the UI thread without making the caller
+        /// wait. At most one update is queued at a time; it applies everything pending when it
+        /// runs, so a burst of events costs one repaint instead of one each.
+        /// </summary>
+        private void ScheduleUiUpdate()
+        {
+            if (!InvokeRequired)
+            {
+                ApplyUiUpdates();
+                return;
+            }
+            if (Interlocked.CompareExchange(ref uiUpdateScheduled, 1, 0) == 0)
+            {
+                try
+                {
+                    BeginInvoke((MethodInvoker)ApplyUiUpdates);
+                }
+                catch (InvalidOperationException)
+                {
+                    // The tool was closed mid-run, so there is no window left to update.
                 }
             }
-            if (e.Counters.Items >= 0 && e.Counters.ItemNo >= 0)
+        }
+
+        private void ApplyUiUpdates()
+        {
+            // Reset before draining: anything queued from here on schedules another update, and
+            // anything queued in between is drained now - nothing is left behind.
+            Interlocked.Exchange(ref uiUpdateScheduled, 0);
+            if (IsDisposed)
             {
-                MethodInvoker mi = delegate
+                return;
+            }
+            if (!pendingLog.IsEmpty)
+            {
+                lbLog.BeginUpdate();
+                try
                 {
-                    pbRecords.Maximum = e.Counters.Items;
-                    pbRecords.Value = e.Counters.ItemNo;
-                };
-                if (InvokeRequired)
-                {
-                    Invoke(mi);
+                    while (pendingLog.TryDequeue(out var line))
+                    {
+                        if (line.Value && lbLog.Items.Count > 0)
+                        {
+                            lbLog.Items[lbLog.Items.Count - 1] = line.Key;
+                        }
+                        else
+                        {
+                            lbLog.Items.Add(line.Key);
+                        }
+                    }
+                    lbLog.SelectedIndex = lbLog.Items.Count - 1;
                 }
-                else
+                finally
                 {
-                    mi();
+                    lbLog.EndUpdate();
+                }
+            }
+            lock (progressLock)
+            {
+                if (progressChanged)
+                {
+                    if (progressBlocks >= 0 && progressBlockNo >= 0)
+                    {
+                        pbBlocks.Maximum = progressBlocks;
+                        pbBlocks.Value = progressBlockNo;
+                    }
+                    if (progressItems >= 0 && progressItemNo >= 0)
+                    {
+                        pbRecords.Maximum = progressItems;
+                        pbRecords.Value = progressItemNo;
+                    }
+                    progressChanged = false;
                 }
             }
         }

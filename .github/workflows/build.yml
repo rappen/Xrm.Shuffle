@@ -1,0 +1,144 @@
+name: CI Build
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Calculate version
+        id: version
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $year  = (Get-Date).Year
+          $month = (Get-Date).Month
+          $startOfMonth = (Get-Date -Day 1 -Hour 0 -Minute 0 -Second 0).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+          $headers = @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept        = "application/vnd.github.v3+json"
+          }
+          $url = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/workflows/build.yml/runs?created=>=$startOfMonth&per_page=1"
+          $response = Invoke-RestMethod -Uri $url -Headers $headers -ErrorAction Stop
+          $rev = $response.total_count
+
+          $version = "1.$year.$month.$rev"
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Computed version: $version"
+
+      - name: Patch AssemblyInfo.cs
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $file = "XTB\Properties\AssemblyInfo.cs"
+          (Get-Content $file) `
+            -replace 'AssemblyVersion\("[^"]*"\)',     "AssemblyVersion(`"$version`")" `
+            -replace 'AssemblyFileVersion\("[^"]*"\)', "AssemblyFileVersion(`"$version`")" |
+            Set-Content $file
+          Write-Host "Patched $file to version $version"
+
+      - name: Patch nuspec versions
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $nuspecs = @(
+            "XTB\ShuffleRunner.nuspec",
+            "XTB\ShuffleBuilder.nuspec",
+            "XTB\ShuffleDeployer.nuspec"
+          )
+          foreach ($nuspec in $nuspecs) {
+            $path = Resolve-Path $nuspec
+            [xml]$xml = Get-Content $path
+            $xml.package.metadata.version = $version
+            $xml.Save($path)
+            Write-Host "Patched $nuspec to version $version"
+          }
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: NuGet restore
+        run: nuget restore Rappen.XTB.Shuffle.sln
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build solution (Release)
+        run: msbuild Rappen.XTB.Shuffle.sln /p:Configuration=Release /p:Platform="Any CPU" /m
+
+      - name: Locate VSTest
+        id: vstest
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found at $vswhere" }
+          # No -requires / -latest: a bare -find lists only the instances that actually
+          # contain the file, so Build Tools counts and the newest instance without the
+          # test platform cannot win and yield nothing.
+          $console = & $vswhere -products * `
+                       -find "Common7\IDE\Extensions\TestPlatform\vstest.console.exe" | Select-Object -First 1
+          if (-not $console) { throw "vstest.console.exe not found by vswhere" }
+          "PATH=$console" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Found $console"
+
+      - name: Run tests (Release)
+        shell: pwsh
+        run: |
+          & "${{ steps.vstest.outputs.PATH }}" `
+            "tests\Xrm.Shuffle.Core.Tests\bin\Release\Xrm.Shuffle.Core.Tests.dll" `
+            /Framework:.NETFramework,Version=v4.8 `
+            /Logger:"trx;LogFileName=Xrm.Shuffle.Core.Tests.Release.trx" `
+            /ResultsDirectory:TestResults
+          if ($LASTEXITCODE -ne 0) { throw "Tests failed with exit code $LASTEXITCODE" }
+
+      # The product compiles differently in the two configurations: ShuffleDataImport
+      # logs the match query as FetchXml under #if DEBUG, which sends a message the
+      # test doubles have to answer. Release alone would let that divergence through,
+      # green here and red in Visual Studio, which is what happened once already.
+      - name: Build solution (Debug)
+        run: msbuild Rappen.XTB.Shuffle.sln /p:Configuration=Debug /p:Platform="Any CPU" /m
+
+      - name: Run tests (Debug)
+        shell: pwsh
+        run: |
+          & "${{ steps.vstest.outputs.PATH }}" `
+            "tests\Xrm.Shuffle.Core.Tests\bin\Debug\Xrm.Shuffle.Core.Tests.dll" `
+            /Framework:.NETFramework,Version=v4.8 `
+            /Logger:"trx;LogFileName=Xrm.Shuffle.Core.Tests.Debug.trx" `
+            /ResultsDirectory:TestResults
+          if ($LASTEXITCODE -ne 0) { throw "Tests failed with exit code $LASTEXITCODE" }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ steps.version.outputs.VERSION }}
+          path: TestResults/*.trx
+
+      - name: NuGet pack
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path nupkg | Out-Null
+          nuget pack "XTB\ShuffleRunner.nuspec" -OutputDirectory nupkg
+          nuget pack "XTB\ShuffleBuilder.nuspec" -OutputDirectory nupkg
+          nuget pack "XTB\ShuffleDeployer.nuspec" -OutputDirectory nupkg
+
+      - name: Upload nupkg artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg-${{ steps.version.outputs.VERSION }}
+          path: nupkg/*.nupkg

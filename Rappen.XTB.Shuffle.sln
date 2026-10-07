@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.5.33516.290
+# Visual Studio Version 18
+VisualStudioVersion = 18.4.11626.88
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rappen.XTB.Shuffle", "XTB\Rappen.XTB.Shuffle.csproj", "{13AE5564-5C72-4A70-8AC5-00D227E8200A}"
 EndProject
@@ -15,10 +15,25 @@ Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "Xrm.Utils.Core.Common", "Xr
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{5DE162B2-F4D4-4D6E-BBA7-5F8DB8A14358}"
 	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+		LICENCE = LICENCE
+		README.md = README.md
 		XTB\ShuffleBuilder.nuspec = XTB\ShuffleBuilder.nuspec
 		XTB\ShuffleDeployer.nuspec = XTB\ShuffleDeployer.nuspec
 		XTB\ShuffleRunner.nuspec = XTB\ShuffleRunner.nuspec
 	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{D9752343-576F-48AD-A576-4CFC3499C7F4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{7F7BC1BA-C6C6-47B9-8D60-268822E0A334}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\build.yml = .github\workflows\build.yml
+		.github\workflows\release.yml = .github\workflows\release.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{3F6B08D4-9C1A-4E77-A5B2-8E93D1C60F52}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Xrm.Shuffle.Core.Tests", "tests\Xrm.Shuffle.Core.Tests\Xrm.Shuffle.Core.Tests.csproj", "{7C3E9A21-4B8D-4E52-9F1C-6D0A5B2E4417}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -30,6 +45,10 @@ Global
 		{13AE5564-5C72-4A70-8AC5-00D227E8200A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{13AE5564-5C72-4A70-8AC5-00D227E8200A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{13AE5564-5C72-4A70-8AC5-00D227E8200A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7C3E9A21-4B8D-4E52-9F1C-6D0A5B2E4417}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7C3E9A21-4B8D-4E52-9F1C-6D0A5B2E4417}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7C3E9A21-4B8D-4E52-9F1C-6D0A5B2E4417}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7C3E9A21-4B8D-4E52-9F1C-6D0A5B2E4417}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -37,6 +56,8 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{5C10BFE2-AFAA-4B01-A570-B30EF41DE1F0} = {44DE50B5-DA2B-4BD6-9D10-8BB345F68226}
 		{A939CF3B-672A-4F68-8E6A-89EFE8C8CFBB} = {17CCEFED-E37B-47CF-BD9F-E7596E65FCE9}
+		{7F7BC1BA-C6C6-47B9-8D60-268822E0A334} = {D9752343-576F-48AD-A576-4CFC3499C7F4}
+		{7C3E9A21-4B8D-4E52-9F1C-6D0A5B2E4417} = {3F6B08D4-9C1A-4E77-A5B2-8E93D1C60F52}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {ED295346-E5B5-4006-855E-1100CEB0F456}
@@ -46,5 +67,7 @@ Global
 		Xrm.Utils.Core\Xrm.Utils.Core.Common\Xrm.Utils.Core.Common.projitems*{13ae5564-5c72-4a70-8ac5-00d227e8200a}*SharedItemsImports = 4
 		shared\Xrm.Shuffle.Core\Xrm.Shuffle.Core.projitems*{5c10bfe2-afaa-4b01-a570-b30ef41de1f0}*SharedItemsImports = 13
 		Xrm.Utils.Core\Xrm.Utils.Core.Common\Xrm.Utils.Core.Common.projitems*{a939cf3b-672a-4f68-8e6a-89efe8c8cfbb}*SharedItemsImports = 13
+		shared\Xrm.Shuffle.Core\Xrm.Shuffle.Core.projitems*{7c3e9a21-4b8d-4e52-9f1c-6d0a5b2e4417}*SharedItemsImports = 4
+		Xrm.Utils.Core\Xrm.Utils.Core.Common\Xrm.Utils.Core.Common.projitems*{7c3e9a21-4b8d-4e52-9f1c-6d0a5b2e4417}*SharedItemsImports = 4
 	EndGlobalSection
 EndGlobal

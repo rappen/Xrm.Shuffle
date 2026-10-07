@@ -6,6 +6,7 @@
     using global::Xrm.Utils.Core.Common.Misc;
     using Microsoft.Crm.Sdk.Messages;
     using Microsoft.Xrm.Sdk;
+    using Microsoft.Xrm.Sdk.Messages;
     using Microsoft.Xrm.Sdk.Query;
     using System;
     using System.Collections.Generic;
@@ -16,6 +17,62 @@
 
     public partial class Shuffler
     {
+        #region Bulk Operation Support Cache
+
+        /// <summary>
+        /// Cache for CreateMultiple support per entity logical name.
+        /// True = supported, False = not supported, null = not yet checked.
+        /// </summary>
+        private Dictionary<string, bool> createMultipleSupportCache = new Dictionary<string, bool>();
+
+        /// <summary>
+        /// Cache for UpdateMultiple support per entity logical name.
+        /// True = supported, False = not supported, null = not yet checked.
+        /// </summary>
+        private Dictionary<string, bool> updateMultipleSupportCache = new Dictionary<string, bool>();
+
+        /// <summary>
+        /// Cache for UpsertMultiple support per entity logical name.
+        /// True = supported, False = not supported, null = not yet checked.
+        /// </summary>
+        private Dictionary<string, bool> upsertMultipleSupportCache = new Dictionary<string, bool>();
+
+        /// <summary>
+        /// Cache for Upsert (single) support per entity logical name.
+        /// True = supported, False = not supported, null = not yet checked.
+        /// </summary>
+        private Dictionary<string, bool> upsertSupportCache = new Dictionary<string, bool>();
+
+        /// <summary>
+        /// Fault code indicating the message is not implemented (used for on-premises fallback detection).
+        /// </summary>
+        private const int MessageNotImplementedErrorCode = unchecked((int)0x80040265);
+
+        /// <summary>
+        /// Deferred state changes for the block currently being imported.
+        /// Held as a field so that the batch flush methods can fill in the actual record id,
+        /// which is only known once the batch has been sent.
+        /// </summary>
+        private List<DeferredStateChange> deferredStates = new List<DeferredStateChange>();
+
+        /// <summary>
+        /// Deferred owner changes for the block currently being imported. See <see cref="deferredStates"/>.
+        /// </summary>
+        private List<DeferredOwnerChange> deferredOwners = new List<DeferredOwnerChange>();
+
+        /// <summary>
+        /// Names the record that actually faulted inside a batch flush, so the per-record catch
+        /// can label the error with it.
+        /// </summary>
+        /// <remarks>
+        /// A flush is triggered by whichever record fills the batch, so the enclosing loop
+        /// variable points at the last record enqueued - not at the one that failed several
+        /// records earlier. Null when the fault did not come from a batch.
+        /// </remarks>
+        private string batchFailureLabel;
+
+        #endregion Bulk Operation Support Cache
+
         #region Private Methods
 
         private static bool EntityAttributesEqual(IExecutionContainer container, List<string> matchattributes, Entity entity1, Entity entity2)
@@ -23,17 +80,7 @@
             var match = true;
             foreach (var attr in matchattributes)
             {
-                var srcvalue = "";
-                if (attr == container.Entity(entity1.LogicalName).PrimaryIdAttribute)
-                {
-                    srcvalue = entity1.Id.ToString();
-                }
-                else
-                {
-                    srcvalue = container.AttributeAsBaseType(entity1, attr, "<null>", true).ToString();
-                }
-                var trgvalue = container.AttributeAsBaseType(entity2, attr, "<null>", true).ToString();
-                if (srcvalue != trgvalue)
+                if (SourceAttributeValue(container, entity1, attr) != TargetAttributeValue(container, entity2, attr))
                 {
                     match = false;
                     break;
@@ -42,7 +89,37 @@
             return match;
         }
 
-        private static string GetEntityDisplayString(DataBlockImportMatch match, Entity cdEntity)
+        /// <summary>
+        /// The value of a source record's attribute as compared when matching. The primary key is
+        /// read from Entity.Id, because a record deserialized from a data file does not carry it
+        /// as an attribute.
+        /// </summary>
+        private static string SourceAttributeValue(IExecutionContainer container, Entity entity, string attr) =>
+            attr == container.Entity(entity.LogicalName).PrimaryIdAttribute
+                ? entity.Id.ToString()
+                : TargetAttributeValue(container, entity, attr);
+
+        /// <summary>The value of a target record's attribute as compared when matching.</summary>
+        private static string TargetAttributeValue(IExecutionContainer container, Entity entity, string attr) =>
+            container.AttributeAsBaseType(entity, attr, "<null>", true)?.ToString() ?? "<null>";
+
+        /// <summary>
+        /// A key that is equal for two records exactly when EntityAttributesEqual would call them
+        /// equal on <paramref name="matchattributes"/>. Each value is length-prefixed, so no value
+        /// can run into the next.
+        /// </summary>
+        private static string MatchKey(List<string> matchattributes, Func<string, string> value)
+        {
+            var key = new System.Text.StringBuilder();
+            foreach (var attr in matchattributes)
+            {
+                var part = value(attr);
+                key.Append(part.Length).Append(':').Append(part);
+            }
+            return key.ToString();
+        }
+
+        private static string GetEntityDisplayString(IExecutionContainer container, DataBlockImportMatch match, Entity cdEntity)
         {
             var unique = new List<string>();
             if (match != null && match.Attribute.Length > 0)
@@ -54,7 +131,17 @@
                     {
                         matchdisplay = attribute.Name;
                     }
-                    unique.Add(cdEntity.AttributeAsString(matchdisplay, "<null>", true));
+                    if (matchdisplay == container.Entity(cdEntity.LogicalName).PrimaryIdAttribute)
+                    {   // The primary key is carried in Entity.Id, never in Entity.Attributes, so
+                        // reading it as an attribute would log <null> for every record of a block
+                        // matching on the primary key. EntityAttributesEqual special-cases it the
+                        // same way when comparing.
+                        unique.Add(cdEntity.Id.ToString());
+                    }
+                    else
+                    {
+                        unique.Add(cdEntity.AttributeAsString(matchdisplay, "<null>", true));
+                    }
                 }
             }
             if (unique.Count == 0)
@@ -105,20 +192,34 @@
             }
         }
 
-        private EntityCollection GetAllRecordsForMatching(IExecutionContainer container, List<string> allattributes, Entity cdEntity)
+        private IPreRetrievedMatches GetAllRecordsForMatching(IExecutionContainer container, List<string> allattributes, List<string> matchattributes, Entity cdEntity)
         {
             container.StartSection(MethodBase.GetCurrentMethod().Name);
-            var qMatch = new QueryExpression(cdEntity.LogicalName)
+            try
             {
-                ColumnSet = new ColumnSet(allattributes.ToArray())
-            };
-#if DEBUG
-            container.Log($"Retrieving all records for {cdEntity.LogicalName}:\n{container.ConvertToFetchXml(qMatch)}");
-#endif
-            var matches = container.RetrieveMultiple(qMatch);
-            SendLine(container, $"Pre-retrieved {matches.Count()} records for matching");
-            container.EndSection();
-            return matches;
+                var qMatch = new QueryExpression(cdEntity.LogicalName)
+                {
+                    ColumnSet = new ColumnSet(allattributes.ToArray())
+                };
+    #if DEBUG
+                container.Log($"Retrieving all records for {cdEntity.LogicalName}:\n{container.ConvertToFetchXml(qMatch)}");
+    #endif
+                // RetrieveAll follows the paging cookie. A single RetrieveMultiple stops at 5000
+                // records, and every target record past that looked new, so it was created again.
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                var records = container.RetrieveAll(qMatch);
+                var matches = new InMemoryPreRetrievedMatches(
+                    records.Entities,
+                    target => MatchKey(matchattributes, attr => TargetAttributeValue(container, target, attr)),
+                    source => MatchKey(matchattributes, attr => SourceAttributeValue(container, source, attr)));
+                timer.Stop();
+                SendLine(container, $"Pre-retrieved {matches.Count} records for matching ({matches.KeyCount} distinct match keys, {timer.ElapsedMilliseconds} ms)");
+                return matches;
+            }
+            finally
+            {
+                container.EndSection();
+            }
         }
 
         private List<string> GetMatchAttributes(DataBlockImportMatch match)
@@ -139,101 +240,106 @@
             return result;
         }
 
-        private EntityCollection GetMatchingRecords(IExecutionContainer container, Entity cdEntity, List<string> matchattributes, List<string> updateattributes, bool preretrieveall, ref EntityCollection cAllRecordsToMatch)
+        private EntityCollection GetMatchingRecords(IExecutionContainer container, Entity cdEntity, List<string> matchattributes, List<string> updateattributes, bool preretrieveall, ref IPreRetrievedMatches cAllRecordsToMatch)
         {
             container.StartSection(MethodBase.GetCurrentMethod().Name);
-            EntityCollection matches = null;
-            var allattributes = new List<string>
+            try
             {
-                container.Entity(cdEntity.LogicalName).PrimaryIdAttribute
-            };
-            if (cdEntity.Contains("ownerid"))
-            {
-                allattributes.Add("ownerid");
-            }
-            if (cdEntity.Contains("statecode") || cdEntity.Contains("statuscode"))
-            {
-                allattributes.Add("statecode");
-                allattributes.Add("statuscode");
-            }
-            allattributes = allattributes.Union(matchattributes.Union(updateattributes)).ToList();
-            if (preretrieveall)
-            {
-                if (cAllRecordsToMatch == null)
+                EntityCollection matches = null;
+                var allattributes = new List<string>
                 {
-                    cAllRecordsToMatch = GetAllRecordsForMatching(container, allattributes, cdEntity);
-                }
-                matches = GetMatchingRecordsFromPreRetrieved(container, matchattributes, cdEntity, cAllRecordsToMatch);
-            }
-            else
-            {
-                var qMatch = new QueryExpression(cdEntity.LogicalName)
-                {
-                    // We need to be able to see if any attributes have changed, so lets make sure matching records have all the attributes that will be updated
-                    ColumnSet = new ColumnSet(allattributes.ToArray())
+                    container.Entity(cdEntity.LogicalName).PrimaryIdAttribute
                 };
-
-                foreach (var matchattr in matchattributes)
+                if (cdEntity.Contains("ownerid"))
                 {
-                    object value = null;
-                    if (cdEntity.Contains(matchattr))
-                    {
-                        value = container.AttributeAsBaseType(cdEntity, matchattr, null, false);
-                    }
-                    else if (matchattr == container.Entity(cdEntity.LogicalName).PrimaryIdAttribute)
-                    {
-                        value = cdEntity.Id;
-                    }
-                    if (value != null)
-                    {
-                        Query.AppendCondition(qMatch.Criteria, LogicalOperator.And, matchattr, Microsoft.Xrm.Sdk.Query.ConditionOperator.Equal, value);
-                    }
-                    else
-                    {
-                        Query.AppendCondition(qMatch.Criteria, LogicalOperator.And, matchattr, Microsoft.Xrm.Sdk.Query.ConditionOperator.Null, null);
-                    }
+                    allattributes.Add("ownerid");
                 }
-#if DEBUG
-                container.Log($"Finding matches for {cdEntity.LogicalName}:\n{container.ConvertToFetchXml(qMatch)}");
-#endif
-                matches = container.RetrieveMultiple(qMatch);
+                if (cdEntity.Contains("statecode") || cdEntity.Contains("statuscode"))
+                {
+                    allattributes.Add("statecode");
+                    allattributes.Add("statuscode");
+                }
+                allattributes = allattributes.Union(matchattributes.Union(updateattributes)).ToList();
+                if (preretrieveall)
+                {
+                    if (cAllRecordsToMatch == null)
+                    {
+                        cAllRecordsToMatch = GetAllRecordsForMatching(container, allattributes, matchattributes, cdEntity);
+                    }
+                    matches = GetMatchingRecordsFromPreRetrieved(container, cdEntity, cAllRecordsToMatch);
+                }
+                else
+                {
+                    var qMatch = new QueryExpression(cdEntity.LogicalName)
+                    {
+                        // We need to be able to see if any attributes have changed, so lets make sure matching records have all the attributes that will be updated
+                        ColumnSet = new ColumnSet(allattributes.ToArray())
+                    };
+
+                    foreach (var matchattr in matchattributes)
+                    {
+                        object value = null;
+                        if (cdEntity.Contains(matchattr))
+                        {
+                            value = container.AttributeAsBaseType(cdEntity, matchattr, null, false);
+                        }
+                        else if (matchattr == container.Entity(cdEntity.LogicalName).PrimaryIdAttribute)
+                        {
+                            value = cdEntity.Id;
+                        }
+                        if (value != null)
+                        {
+                            Query.AppendCondition(qMatch.Criteria, LogicalOperator.And, matchattr, Microsoft.Xrm.Sdk.Query.ConditionOperator.Equal, value);
+                        }
+                        else
+                        {
+                            Query.AppendCondition(qMatch.Criteria, LogicalOperator.And, matchattr, Microsoft.Xrm.Sdk.Query.ConditionOperator.Null, null);
+                        }
+                    }
+    #if DEBUG
+                    container.Log($"Finding matches for {cdEntity.LogicalName}:\n{container.ConvertToFetchXml(qMatch)}");
+    #endif
+                    matches = container.RetrieveMultiple(qMatch);
+                }
+                return matches;
             }
-            container.EndSection();
-            return matches;
+            finally
+            {
+                container.EndSection();
+            }
         }
 
-        private EntityCollection GetMatchingRecordsFromPreRetrieved(IExecutionContainer container, List<string> matchattributes, Entity cdEntity, EntityCollection cAllRecordsToMatch)
+        private EntityCollection GetMatchingRecordsFromPreRetrieved(IExecutionContainer container, Entity cdEntity, IPreRetrievedMatches cAllRecordsToMatch)
         {
             container.StartSection(MethodBase.GetCurrentMethod().Name);
-            container.Log($"Searching matches for: {cdEntity.Id} {cdEntity.LogicalName}");
-            var result = new EntityCollection();
-            foreach (var cdRecord in cAllRecordsToMatch.Entities)
+            try
             {
-                if (EntityAttributesEqual(container, matchattributes, cdEntity, cdRecord))
+                container.Log($"Searching matches for: {cdEntity.Id} {cdEntity.LogicalName}");
+                var result = cAllRecordsToMatch.Find(cdEntity);
+                foreach (var cdRecord in result.Entities)
                 {
-                    result.Add(cdRecord);
                     container.Log($"Found match: {cdRecord.Id} {cdRecord.LogicalName}");
                 }
+                container.Log($"Returned matches: {result.Count()}");
+                return result;
             }
-            container.Log($"Returned matches: {result.Count()}");
-            container.EndSection();
-            return result;
+            finally
+            {
+                container.EndSection();
+            }
         }
 
         private List<string> GetUpdateAttributes(EntityCollection entities)
         {
-            var result = new List<string>();
+            var result = new HashSet<string>();
             foreach (var entity in entities.Entities)
             {
                 foreach (var attribute in entity.Attributes.Keys)
                 {
-                    if (!result.Contains(attribute))
-                    {
-                        result.Add(attribute);
-                    }
+                    result.Add(attribute);
                 }
             }
-            return result;
+            return result.ToList();
         }
 
         private Tuple<int, int, int, int, int, EntityReferenceCollection> ImportDataBlock(IExecutionContainer container, DataBlock block, EntityCollection cEntities)
@@ -266,6 +372,48 @@
                 var matchattributes = GetMatchAttributes(block.Import.Match);
                 var updateattributes = !updateidentical ? GetUpdateAttributes(cEntities) : new List<string>();
                 var preretrieveall = block.Import.Match?.PreRetrieveAll == true;
+                var batchsize = Math.Max(1, Math.Min(block.Import.BatchSize, 1000));
+                var deferStateAndOwner = block.Import.DeferStateAndOwner;
+
+                if (deferStateAndOwner && IsStateOwnerOnlyBlock(cEntities))
+                {
+                    // A block that carries nothing but state and owner is already a second pass in
+                    // its own right - a common pattern where the state changes live in a separate
+                    // UpdateOnly block. Deferring here would strip every attribute and leave empty
+                    // records to save, so the option is ignored rather than obeyed.
+                    deferStateAndOwner = false;
+                    SendLine(container, "DeferStateAndOwner ignored - this block carries no attributes besides state and owner");
+                }
+
+                if (deferStateAndOwner)
+                {
+                    SendLine(container, "DeferStateAndOwner enabled - state/owner will be applied in second pass");
+                }
+
+                // Determine if we can use Upsert path (eliminates need for PreRetrieveAll queries)
+                // Upsert finds the target record by its primary key and nothing else, so it can only
+                // stand in for a Match on that key alone - matching on anything else (a name, say)
+                // would create a second record wherever the ids differ. It also needs records with
+                // their ID (CreateWithId) and UpdateIdentical=true, because Upsert cannot skip
+                // identical records - we don't retrieve existing data to compare. Like the rest of
+                // the bulk machinery it is opt-in through BatchSize, so an existing definition keeps
+                // the Match-based path it was written against.
+                var canUseUpsert = batchsize > 1 &&
+                                   save == SaveTypes.CreateUpdate &&
+                                   includeid &&
+                                   delete == DeleteTypes.None &&
+                                   updateidentical &&
+                                   matchattributes.Count == 1 &&
+                                   matchattributes[0] == container.Entity(block.Entity).PrimaryIdAttribute;
+
+                if (canUseUpsert)
+                {
+                    SendLine(container, "Upsert path enabled - records will be upserted without pre-retrieval queries");
+                    if (preretrieveall)
+                    {
+                        SendLine(container, "Note: PreRetrieveAll is not needed when using Upsert and will be skipped");
+                    }
+                }
 
                 SendLine(container);
                 SendLine(container, $"Importing block {name} - {cEntities.Count()} records ");
@@ -279,46 +427,55 @@
 
                     qDelete.ColumnSet.AddColumn(container.Entity(entity).PrimaryNameAttribute);
                     var deleterecords = container.RetrieveMultiple(qDelete);
-                    //var deleterecords = Entity.RetrieveMultiple(crmsvc, qDelete, log);
                     SendLine(container, $"Deleting ALL {entity} - {deleterecords.Count()} records");
+                    var deleteBatch = new List<Entity>();
                     foreach (var record in deleterecords.Entities)
                     {
                         SendLine(container, "{0:000} Deleting existing: {1}", i, record);
-                        try
+                        deleteBatch.Add(record);
+                        if (deleteBatch.Count >= batchsize)
                         {
-                            container.Delete(record);
-                            deleted++;
-                        }
-                        catch (FaultException<OrganizationServiceFault> ex)
-                        {
-                            if (ex.Message.ToUpperInvariant().Contains("DOES NOT EXIST"))
-                            {   // This may happen through delayed cascade delete in CRM
-                                SendLine(container, "      ...already deleted");
-                            }
-                            else
-                            {
-                                throw;
-                            }
+                            FlushPendingDeletes(container, deleteBatch, ref deleted, ref failed);
                         }
                         i++;
                     }
+                    FlushPendingDeletes(container, deleteBatch, ref deleted, ref failed);
                 }
                 var totalRecords = cEntities.Count();
                 i = 1;
-                EntityCollection cAllRecordsToMatch = null;
+                IPreRetrievedMatches cAllRecordsToMatch = null;
+                var pendingCreates = new List<PendingCreate>();
+                var pendingUpdates = new List<PendingUpdate>();
+                var pendingUpserts = new List<PendingUpsert>();
+                deferredStates = new List<DeferredStateChange>();
+                deferredOwners = new List<DeferredOwnerChange>();
                 foreach (var cdEntity in cEntities.Entities)
                 {
                     var unique = cdEntity.Id.ToString();
+                    batchFailureLabel = null;
                     SendStatus(-1, -1, totalRecords, i);
                     try
                     {
                         var oldid = cdEntity.Id;
                         var newid = Guid.Empty;
 
+                        // ReplaceGuids rewrites this record's lookups using guidmap, so any record it
+                        // points at must already be committed. Flush first if this record references
+                        // one that is still pending, otherwise the lookup keeps the source-system id.
+                        if (ReferencesPendingCreate(cdEntity, pendingCreates))
+                        {
+                            FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                        }
+
                         ReplaceGuids(container, cdEntity, includeid);
                         ReplaceUpdateInfo(cdEntity);
-                        unique = GetEntityDisplayString(block.Import.Match, cdEntity);
+                        unique = GetEntityDisplayString(container, block.Import.Match, cdEntity);
                         SendStatus(null, unique);
+
+                        if (deferStateAndOwner)
+                        {
+                            StripAndDeferStateOwner(cdEntity, deferredStates, deferredOwners, i, unique);
+                        }
 
                         if (!block.TypeSpecified || block.Type == EntityTypes.Entity)
                         {
@@ -337,19 +494,69 @@
                                     {
                                         cdEntity.Id = Guid.Empty;
                                     }
-                                    if (SaveEntity(container, cdEntity, null, updateinactive, updateidentical, i, unique))
+                                    if (IsBatchable(cdEntity))
                                     {
-                                        created++;
-                                        newid = cdEntity.Id;
-                                        references.Add(cdEntity.ToEntityReference());
+                                        pendingCreates.Add(new PendingCreate { Entity = cdEntity, OldId = oldid, Position = i, Identifier = unique });
+                                        if (pendingCreates.Count >= batchsize)
+                                        {
+                                            FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                        }
                                     }
+                                    else
+                                    {
+                                        FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                        FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+                                        if (SaveEntity(container, cdEntity, null, updateinactive, updateidentical, i, unique))
+                                        {
+                                            created++;
+                                            newid = cdEntity.Id;
+                                            references.Add(cdEntity.ToEntityReference());
+                                        }
+                                    }
+                                }
+                            }
+                            else if (canUseUpsert && IsBatchable(cdEntity))
+                            {
+                                // Upsert path: skip match queries entirely, let Dataverse decide create vs update
+                                pendingUpserts.Add(new PendingUpsert { Entity = cdEntity, OldId = oldid, Position = i, Identifier = unique });
+                                if (pendingUpserts.Count >= batchsize)
+                                {
+                                    FlushPendingUpserts(container, pendingUpserts, ref created, ref updated, ref failed, references);
+                                }
+                                newid = cdEntity.Id;
+                            }
+                            else if (canUseUpsert && !IsBatchable(cdEntity))
+                            {
+                                // Non-batchable record in Upsert mode: flush batches and use SaveEntity
+                                FlushPendingUpserts(container, pendingUpserts, ref created, ref updated, ref failed, references);
+                                FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+                                if (SaveEntity(container, cdEntity, null, updateinactive, updateidentical, i, unique))
+                                {
+                                    // SaveEntity handles create vs update detection internally when match is null
+                                    // Since we're in upsert mode with includeid=true, the record has an ID
+                                    // We count this as "updated" since we don't know if it was created or updated
+                                    updated++;
+                                    newid = cdEntity.Id;
+                                    references.Add(cdEntity.ToEntityReference());
                                 }
                             }
                             else
                             {
+                                // Original match-based path.
+                                // A live match query must see the records created so far, so the batch
+                                // has to be flushed first. PreRetrieveAll matches against a snapshot
+                                // taken once at the start of the block, which never sees records created
+                                // during the block whether we flush or not - so there the flush buys
+                                // nothing and would defeat batching for every matched block.
+                                if (!preretrieveall && pendingCreates.Count > 0)
+                                {
+                                    FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                }
                                 var matches = GetMatchingRecords(container, cdEntity, matchattributes, updateattributes, preretrieveall, ref cAllRecordsToMatch);
                                 if (delete == DeleteTypes.All || (matches.Count() == 1 && delete == DeleteTypes.Existing))
                                 {
+                                    FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
                                     foreach (var cdMatch in matches.Entities)
                                     {
                                         SendLine(container, "{0:000} Deleting existing: {1}", i, unique);
@@ -385,11 +592,24 @@
                                         {
                                             cdEntity.Id = Guid.Empty;
                                         }
-                                        if (SaveEntity(container, cdEntity, null, updateinactive, updateidentical, i, unique))
+                                        if (IsBatchable(cdEntity))
                                         {
-                                            created++;
-                                            newid = cdEntity.Id;
-                                            references.Add(cdEntity.ToEntityReference());
+                                            pendingCreates.Add(new PendingCreate { Entity = cdEntity, OldId = oldid, Position = i, Identifier = unique });
+                                            if (pendingCreates.Count >= batchsize)
+                                            {
+                                                FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                            FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+                                            if (SaveEntity(container, cdEntity, null, updateinactive, updateidentical, i, unique))
+                                            {
+                                                created++;
+                                                newid = cdEntity.Id;
+                                                references.Add(cdEntity.ToEntityReference());
+                                            }
                                         }
                                     }
                                 }
@@ -399,14 +619,42 @@
                                     newid = match.Id;
                                     if (save == SaveTypes.CreateUpdate || save == SaveTypes.UpdateOnly)
                                     {
-                                        if (SaveEntity(container, cdEntity, match, updateinactive, updateidentical, i, unique))
+                                        if (IsBatchable(cdEntity))
                                         {
-                                            updated++;
-                                            references.Add(cdEntity.ToEntityReference());
+                                            cdEntity.Id = match.Id;
+                                            var primaryIdAttribute = container.Entity(cdEntity.LogicalName).PrimaryIdAttribute;
+                                            var attrs = cdEntity.Attributes.Keys.ToList();
+                                            if (attrs.Contains(primaryIdAttribute))
+                                            {
+                                                attrs.Remove(primaryIdAttribute);
+                                            }
+                                            if (updateidentical || !EntityAttributesEqual(container, attrs, cdEntity, match))
+                                            {
+                                                pendingUpdates.Add(new PendingUpdate { Entity = cdEntity, Position = i, Identifier = unique });
+                                                if (pendingUpdates.Count >= batchsize)
+                                                {
+                                                    FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+                                                }
+                                            }
+                                            else
+                                            {
+                                                skipped++;
+                                                SendLine(container, "{0:000} Skipped: {1} (Identical)", i, unique);
+                                            }
                                         }
                                         else
                                         {
-                                            skipped++;
+                                            FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                                            FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+                                            if (SaveEntity(container, cdEntity, match, updateinactive, updateidentical, i, unique))
+                                            {
+                                                updated++;
+                                                references.Add(cdEntity.ToEntityReference());
+                                            }
+                                            else
+                                            {
+                                                skipped++;
+                                            }
                                         }
                                     }
                                     else
@@ -418,8 +666,7 @@
                                 else
                                 {
                                     failed++;
-                                    SendLine(container, $"Import object matches {matches.Count()} records in target database!");
-                                    SendLine(container, unique);
+                                    SendLine(container, "{0:000} Match Failed: {1} matches {2} records in target database", i, unique, matches.Count());
                                 }
                             }
                             if (!oldid.Equals(Guid.Empty) && !newid.Equals(Guid.Empty) && !oldid.Equals(newid) && !guidmap.ContainsKey(oldid))
@@ -428,11 +675,20 @@
                                 guidmap.Add(oldid, newid);
                             }
 
+                            if (deferStateAndOwner && !oldid.Equals(Guid.Empty) && !newid.Equals(Guid.Empty))
+                            {
+                                UpdateDeferredActualIds(oldid, newid);
+                            }
+
                             #endregion Entity
                         }
                         else if (block.Type == EntityTypes.Intersect)
                         {
                             #region Intersect
+
+                            FlushPendingUpserts(container, pendingUpserts, ref created, ref updated, ref failed, references);
+                            FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                            FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
 
                             if (cdEntity.Attributes.Count != 2)
                             {
@@ -447,12 +703,11 @@
                             var ref1 = GetAttributeEntityReference(cdEntity.Attributes.ElementAt(0));
                             var ref2 = GetAttributeEntityReference(cdEntity.Attributes.ElementAt(1));
 
-                            var party1 = new Entity(ref1.LogicalName, ref1.Id); //Entity.InitFromNameAndId(ref1.LogicalName, ref1.Id, crmsvc, log);
-                            var party2 = new Entity(ref2.LogicalName, ref2.Id); //Entity.InitFromNameAndId(ref2.LogicalName, ref2.Id, crmsvc, log);
+                            var party1 = new Entity(ref1.LogicalName, ref1.Id);
+                            var party2 = new Entity(ref2.LogicalName, ref2.Id);
                             try
                             {
                                 container.Associate(party1, party2, intersect);
-                                //party1.Associate(party2, intersect);
                                 created++;
                                 SendLine(container, "{0} Associated: {1}", i.ToString().PadLeft(3, '0'), name);
                             }
@@ -475,7 +730,7 @@
                     catch (Exception ex)
                     {
                         failed++;
-                        SendLine(container, $"\n*** Error record: {unique} ***\n{ex.Message}");
+                        SendLine(container, $"\n*** Error record: {batchFailureLabel ?? unique} ***\n{ex.Message}");
                         container.Log(ex);
                         if (stoponerror)
                         {
@@ -483,6 +738,15 @@
                         }
                     }
                     i++;
+                }
+                FlushPendingUpserts(container, pendingUpserts, ref created, ref updated, ref failed, references);
+                FlushPendingCreates(container, pendingCreates, ref created, ref failed, references);
+                FlushPendingUpdates(container, pendingUpdates, ref updated, ref failed, references);
+
+                if (deferStateAndOwner)
+                {
+                    FlushDeferredStateChanges(container, deferredStates);
+                    FlushDeferredOwnerChanges(container, deferredOwners);
                 }
 
                 SendLine(container, $"Created: {created} Updated: {updated} Skipped: {skipped} Deleted: {deleted} Failed: {failed}");
@@ -507,6 +771,47 @@
                 return new EntityReference(logicname, id);
             }
             return null;
+        }
+
+        /// <summary>
+        /// Determines whether the record holds a reference to a record that is still waiting in the
+        /// create batch. Such a reference cannot be remapped by <see cref="ReplaceGuids"/> yet, because
+        /// the referenced record has no real id until its batch is sent.
+        /// </summary>
+        private static bool ReferencesPendingCreate(Entity cdEntity, List<PendingCreate> pendingCreates)
+        {
+            if (pendingCreates.Count == 0)
+            {
+                return false;
+            }
+            foreach (var prop in cdEntity.Attributes)
+            {
+                Guid referenced;
+                if (prop.Value is EntityReference er)
+                {
+                    referenced = er.Id;
+                }
+                else if (prop.Value is Guid guid)
+                {
+                    referenced = guid;
+                }
+                else
+                {
+                    continue;
+                }
+                if (referenced.Equals(Guid.Empty))
+                {
+                    continue;
+                }
+                foreach (var pending in pendingCreates)
+                {
+                    if (pending.OldId.Equals(referenced))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         private void ReplaceGuids(IExecutionContainer container, Entity cdEntity, bool includeid)
@@ -535,112 +840,1589 @@
         private bool SaveEntity(IExecutionContainer container, Entity cdNewEntity, Entity cdMatchEntity, bool updateInactiveRecord, bool updateIdentical, int pos, string identifier)
         {
             container.StartSection("SaveEntity " + pos.ToString("000 ") + identifier);
-            var recordSaved = false;
-            if (string.IsNullOrWhiteSpace(identifier))
+            try
             {
-                identifier = cdNewEntity.ToString();
+                var recordSaved = false;
+                if (string.IsNullOrWhiteSpace(identifier))
+                {
+                    identifier = cdNewEntity.ToString();
+                }
+                var newOwner = cdNewEntity.GetAttribute<EntityReference>("ownerid", null);
+                var newState = cdNewEntity.GetAttribute<OptionSetValue>("statecode", null);
+                var newStatus = cdNewEntity.GetAttribute<OptionSetValue>("statuscode", null);
+                var newActive = newState != null ? container.GetActiveStates(cdNewEntity.LogicalName).Contains(newState.Value) : true;
+                var nowActive = true;
+                if ((newState == null) != (newStatus == null))
+                {
+                    throw new InvalidDataException("When setting status of the record, both statecode and statuscode must be present");
+                }
+                if (!newActive)
+                {
+                    container.Log("Removing state+status from entity to update");
+                    cdNewEntity.RemoveAttribute("statecode");
+                    cdNewEntity.RemoveAttribute("statuscode");
+                }
+                if (cdMatchEntity == null)
+                {
+                    container.Create(cdNewEntity);
+                    recordSaved = true;
+                    SendLine(container, "{0:000} Created: {1}", pos, identifier);
+                }
+                else
+                {
+                    var oldState = cdMatchEntity.GetAttribute<OptionSetValue>("statecode", null);
+                    var oldActive = oldState != null ? container.GetActiveStates(cdNewEntity.LogicalName).Contains(oldState.Value) : true;
+                    nowActive = oldActive;
+                    cdNewEntity.Id = cdMatchEntity.Id;
+                    if (!oldActive && (newActive || updateInactiveRecord))
+                    {   // Inaktiv post som ska aktiveras eller uppdateras
+                        container.SetState(cdNewEntity, 0, 1);
+                        SendLine(container, "{0:000} Activated: {1} for update", pos, identifier);
+                        nowActive = true;
+                    }
+
+                    if (nowActive)
+                    {
+                        var primaryIdAttribute = container.Entity(cdNewEntity.LogicalName).PrimaryIdAttribute;
+                        var updateattributes = cdNewEntity.Attributes.Keys.ToList();
+                        if (updateattributes.Contains(primaryIdAttribute))
+                        {
+                            updateattributes.Remove(primaryIdAttribute);
+                        }
+                        if (updateIdentical || !EntityAttributesEqual(container, updateattributes, cdNewEntity, cdMatchEntity))
+                        {
+                            try
+                            {
+                                container.Update(cdNewEntity);
+                                recordSaved = true;
+                                SendLine(container, "{0:000} Updated: {1}", pos, identifier);
+                            }
+                            catch (Exception ex)
+                            {
+                                recordSaved = false;
+                                SendLine(container, "{0:000} Update Failed: {1} {2} {3}", pos, identifier, cdNewEntity.LogicalName, ex.Message);
+                            }
+                        }
+                        else
+                        {
+                            SendLine(container, "{0:000} Skipped: {1} (Identical)", pos, identifier);
+                        }
+                    }
+                    else
+                    {
+                        SendLine(container, "{0:000} Inactive: {1}", pos, identifier);
+                    }
+                    if (newOwner != null && !newOwner.Equals(cdMatchEntity.GetAttribute("ownerid", new EntityReference())))
+                    {
+                        container.Principal(cdNewEntity).On(newOwner).Assign();
+
+                        // cdNewEntity.Assign(newOwner);
+                        SendLine(container, "{0:000} Assigned: {1} to {2} {3}", pos, identifier, newOwner.LogicalName, string.IsNullOrEmpty(newOwner.Name) ? newOwner.Id.ToString() : newOwner.Name);
+                    }
+                }
+                if (newActive != nowActive)
+                {   // Active should be changed on the record
+                    var newStatusValue = newStatus.Value;
+                    if (cdNewEntity.LogicalName == "savedquery" && newState.Value == 1 && newStatusValue == 1)
+                    {   // Adjustment for inactive but unpublished view
+                        newStatusValue = 2;
+                    }
+                    if (cdNewEntity.LogicalName == "duplicaterule")
+                    {
+                        if (newStatusValue == 2)
+                        {
+                            container.PublishDuplicateRule(cdNewEntity);
+                            SendLine(container, "{0:000} Publish Duplicate Rule: {1}", pos, identifier);
+                        }
+                        else
+                        {
+                            container.UnpublishDuplicateRule(cdNewEntity);
+                            SendLine(container, "{0:000} Unpublish Duplicate Rule: {1}", pos, identifier);
+                        }
+                    }
+                    else
+                    {
+                        container.SetState(cdNewEntity, newState.Value, newStatusValue);
+                        SendLine(container, "{0:000} SetState: {1}: {2}/{3}", pos, identifier, newState.Value, newStatus.Value);
+                    }
+                }
+                return recordSaved;
             }
-            var newOwner = cdNewEntity.GetAttribute<EntityReference>("ownerid", null);
-            var newState = cdNewEntity.GetAttribute<OptionSetValue>("statecode", null);
-            var newStatus = cdNewEntity.GetAttribute<OptionSetValue>("statuscode", null);
-            var newActive = newState != null ? container.GetActiveStates(cdNewEntity.LogicalName).Contains(newState.Value) : true;
-            var nowActive = true;
-            if ((newState == null) != (newStatus == null))
+            finally
             {
-                throw new InvalidDataException("When setting status of the record, both statecode and statuscode must be present");
+                container.EndSection();
             }
-            if (!newActive)
+        }
+
+        #region Batch Helpers
+
+        private struct PendingCreate
+        {
+            public Entity Entity;
+            public Guid OldId;
+            public int Position;
+            public string Identifier;
+        }
+
+        private struct PendingUpdate
+        {
+            public Entity Entity;
+            public int Position;
+            public string Identifier;
+        }
+
+        private struct PendingUpsert
+        {
+            public Entity Entity;
+            public Guid OldId;
+            public int Position;
+            public string Identifier;
+        }
+
+        private struct DeferredStateChange
+        {
+            public string EntityLogicalName;
+            public Guid OriginalId;      // Id from import file (for lookup)
+            public Guid ActualId;        // Id after create/update (for applying state)
+            public OptionSetValue StateCode;
+            public OptionSetValue StatusCode;
+            public int Position;
+            public string Identifier;
+        }
+
+        private struct DeferredOwnerChange
+        {
+            public string EntityLogicalName;
+            public Guid OriginalId;      // Id from import file (for lookup)
+            public Guid ActualId;        // Id after create/update (for assigning owner)
+            public EntityReference Owner;
+            public int Position;
+            public string Identifier;
+        }
+
+        /// <summary>
+        /// Checks if CreateMultiple message is supported for the specified entity.
+        /// Results are cached per entity logical name for the lifetime of the import run.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="entityLogicalName">The logical name of the entity to check.</param>
+        /// <returns>True if CreateMultiple is supported; otherwise, false.</returns>
+        private bool IsCreateMultipleSupported(IExecutionContainer container, string entityLogicalName)
+        {
+            return IsBulkMessageSupported(container, entityLogicalName, "CreateMultiple", createMultipleSupportCache);
+        }
+
+        /// <summary>
+        /// Checks if UpdateMultiple message is supported for the specified entity.
+        /// Results are cached per entity logical name for the lifetime of the import run.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="entityLogicalName">The logical name of the entity to check.</param>
+        /// <returns>True if UpdateMultiple is supported; otherwise, false.</returns>
+        private bool IsUpdateMultipleSupported(IExecutionContainer container, string entityLogicalName)
+        {
+            return IsBulkMessageSupported(container, entityLogicalName, "UpdateMultiple", updateMultipleSupportCache);
+        }
+
+        /// <summary>
+        /// Checks if UpsertMultiple message is supported for the specified entity.
+        /// Results are cached per entity logical name for the lifetime of the import run.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="entityLogicalName">The logical name of the entity to check.</param>
+        /// <returns>True if UpsertMultiple is supported; otherwise, false.</returns>
+        private bool IsUpsertMultipleSupported(IExecutionContainer container, string entityLogicalName)
+        {
+            return IsBulkMessageSupported(container, entityLogicalName, "UpsertMultiple", upsertMultipleSupportCache);
+        }
+
+        /// <summary>
+        /// Checks if Upsert (single) message is supported for the specified entity.
+        /// Results are cached per entity logical name for the lifetime of the import run.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="entityLogicalName">The logical name of the entity to check.</param>
+        /// <returns>True if Upsert is supported; otherwise, false.</returns>
+        private bool IsUpsertSupported(IExecutionContainer container, string entityLogicalName)
+        {
+            return IsBulkMessageSupported(container, entityLogicalName, "Upsert", upsertSupportCache);
+        }
+
+        /// <summary>
+        /// Checks if a specific SDK message is supported for an entity by querying sdkmessagefilter.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="entityLogicalName">The logical name of the entity to check.</param>
+        /// <param name="messageName">The name of the SDK message (e.g., "CreateMultiple", "UpdateMultiple").</param>
+        /// <param name="cache">The cache dictionary to use for storing results.</param>
+        /// <returns>True if the message is supported; otherwise, false.</returns>
+        private bool IsBulkMessageSupported(IExecutionContainer container, string entityLogicalName, string messageName, Dictionary<string, bool> cache)
+        {
+            if (cache.TryGetValue(entityLogicalName, out var isSupported))
             {
-                container.Log("Removing state+status from entity to update");
-                cdNewEntity.RemoveAttribute("statecode");
-                cdNewEntity.RemoveAttribute("statuscode");
+                return isSupported;
             }
-            if (cdMatchEntity == null)
+
+            try
             {
-                container.Create(cdNewEntity);
-                recordSaved = true;
-                SendLine(container, "{0:000} Created: {1}", pos, identifier);
+                var query = new QueryExpression("sdkmessagefilter")
+                {
+                    ColumnSet = new ColumnSet("sdkmessagefilterid"),
+                    TopCount = 1,
+                    Criteria = new FilterExpression
+                    {
+                        FilterOperator = LogicalOperator.And,
+                        Conditions =
+                        {
+                            new ConditionExpression("primaryobjecttypecode", Microsoft.Xrm.Sdk.Query.ConditionOperator.Equal, entityLogicalName)
+                        }
+                    },
+                    LinkEntities =
+                    {
+                        new LinkEntity
+                        {
+                            LinkFromEntityName = "sdkmessagefilter",
+                            LinkToEntityName = "sdkmessage",
+                            LinkFromAttributeName = "sdkmessageid",
+                            LinkToAttributeName = "sdkmessageid",
+                            LinkCriteria = new FilterExpression
+                            {
+                                Conditions =
+                                {
+                                    new ConditionExpression("name", Microsoft.Xrm.Sdk.Query.ConditionOperator.Equal, messageName)
+                                }
+                            }
+                        }
+                    }
+                };
+
+                var result = container.RetrieveMultiple(query);
+                isSupported = result.Entities.Count > 0;
+                cache[entityLogicalName] = isSupported;
+                container.Log($"{messageName} support for {entityLogicalName}: {isSupported}");
+                return isSupported;
             }
-            else
+            catch (Exception ex)
             {
-                var oldState = cdMatchEntity.GetAttribute<OptionSetValue>("statecode", null);
-                var oldActive = oldState != null ? container.GetActiveStates(cdNewEntity.LogicalName).Contains(oldState.Value) : true;
-                nowActive = oldActive;
-                cdNewEntity.Id = cdMatchEntity.Id;
-                if (!oldActive && (newActive || updateInactiveRecord))
-                {   // Inaktiv post som ska aktiveras eller uppdateras
-                    container.SetState(cdNewEntity, 0, 1);
-                    SendLine(container, "{0:000} Activated: {1} for update", pos, identifier);
-                    nowActive = true;
+                container.Log($"Failed to check {messageName} support for {entityLogicalName}: {ex.Message}");
+                cache[entityLogicalName] = false;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Marks CreateMultiple as unsupported for the specified entity (used when runtime execution fails).
+        /// </summary>
+        private void MarkCreateMultipleUnsupported(string entityLogicalName)
+        {
+            createMultipleSupportCache[entityLogicalName] = false;
+        }
+
+        /// <summary>
+        /// Marks UpdateMultiple as unsupported for the specified entity (used when runtime execution fails).
+        /// </summary>
+        private void MarkUpdateMultipleUnsupported(string entityLogicalName)
+        {
+            updateMultipleSupportCache[entityLogicalName] = false;
+        }
+
+        /// <summary>
+        /// Marks UpsertMultiple as unsupported for the specified entity (used when runtime execution fails).
+        /// </summary>
+        private void MarkUpsertMultipleUnsupported(string entityLogicalName)
+        {
+            upsertMultipleSupportCache[entityLogicalName] = false;
+        }
+
+        /// <summary>
+        /// Marks Upsert (single) as unsupported for the specified entity (used when runtime execution fails).
+        /// </summary>
+        private void MarkUpsertUnsupported(string entityLogicalName)
+        {
+            upsertSupportCache[entityLogicalName] = false;
+        }
+
+        /// <summary>
+        /// Checks if an exception indicates that the bulk message is not implemented (on-premises scenario).
+        /// </summary>
+        private static bool IsBulkMessageNotImplemented(Exception ex)
+        {
+            if (ex is FaultException<OrganizationServiceFault> fault)
+            {
+                return fault.Detail?.ErrorCode == MessageNotImplementedErrorCode;
+            }
+            if (ex is NotSupportedException)
+            {
+                return true;
+            }
+            if (ex.InnerException != null)
+            {
+                return IsBulkMessageNotImplemented(ex.InnerException);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// The attributes DeferStateAndOwner strips off a record and applies in a second pass.
+        /// </summary>
+        private static readonly string[] stateownerattributes = { "statecode", "statuscode", "ownerid" };
+
+        /// <summary>
+        /// Determines whether a record carries anything at all besides state and owner, ignoring
+        /// its own primary id. Stripping the state and owner off a record that carries nothing else
+        /// would leave nothing to save.
+        /// </summary>
+        private static bool HasAttributesBesidesStateOwner(Entity entity)
+        {
+            var primaryid = entity.LogicalName + "id";
+            return entity.Attributes.Keys.Any(a => !stateownerattributes.Contains(a) && a != primaryid);
+        }
+
+        /// <summary>
+        /// Determines whether every record in the block carries nothing besides state and owner.
+        /// </summary>
+        private static bool IsStateOwnerOnlyBlock(EntityCollection cEntities)
+        {
+            return cEntities?.Entities.Count > 0 && !cEntities.Entities.Any(HasAttributesBesidesStateOwner);
+        }
+
+        /// <summary>
+        /// Strips statecode, statuscode, and ownerid from an entity and defers them for later bulk application.
+        /// </summary>
+        /// <param name="entity">The entity to strip attributes from.</param>
+        /// <param name="deferredStates">Collection to store deferred state changes.</param>
+        /// <param name="deferredOwners">Collection to store deferred owner changes.</param>
+        /// <param name="position">Record position for logging.</param>
+        /// <param name="identifier">Record identifier for logging.</param>
+        private void StripAndDeferStateOwner(Entity entity, List<DeferredStateChange> deferredStates, List<DeferredOwnerChange> deferredOwners, int position, string identifier)
+        {
+            if (!HasAttributesBesidesStateOwner(entity))
+            {
+                // Nothing would be left to save. See IsStateOwnerOnlyBlock - this catches the odd
+                // record in a block that is otherwise worth deferring.
+                return;
+            }
+
+            var originalId = entity.Id;
+
+            if (entity.Contains("statecode") && entity.Contains("statuscode"))
+            {
+                deferredStates.Add(new DeferredStateChange
+                {
+                    EntityLogicalName = entity.LogicalName,
+                    OriginalId = originalId,
+                    ActualId = Guid.Empty, // Will be updated after create/update
+                    StateCode = entity.GetAttributeValue<OptionSetValue>("statecode"),
+                    StatusCode = entity.GetAttributeValue<OptionSetValue>("statuscode"),
+                    Position = position,
+                    Identifier = identifier
+                });
+                entity.Attributes.Remove("statecode");
+                entity.Attributes.Remove("statuscode");
+            }
+
+            if (entity.Contains("ownerid"))
+            {
+                deferredOwners.Add(new DeferredOwnerChange
+                {
+                    EntityLogicalName = entity.LogicalName,
+                    OriginalId = originalId,
+                    ActualId = Guid.Empty, // Will be updated after create/update
+                    Owner = entity.GetAttributeValue<EntityReference>("ownerid"),
+                    Position = position,
+                    Identifier = identifier
+                });
+                entity.Attributes.Remove("ownerid");
+            }
+        }
+
+        /// <summary>
+        /// Updates the ActualId in deferred changes after a record is created or updated.
+        /// </summary>
+        /// <param name="originalId">The original Id from the import file.</param>
+        /// <param name="actualId">The actual Id after create/update.</param>
+        private void UpdateDeferredActualIds(Guid originalId, Guid actualId)
+        {
+            for (int i = 0; i < deferredStates.Count; i++)
+            {
+                if (deferredStates[i].OriginalId == originalId)
+                {
+                    var item = deferredStates[i];
+                    item.ActualId = actualId;
+                    deferredStates[i] = item;
+                }
+            }
+
+            for (int i = 0; i < deferredOwners.Count; i++)
+            {
+                if (deferredOwners[i].OriginalId == originalId)
+                {
+                    var item = deferredOwners[i];
+                    item.ActualId = actualId;
+                    deferredOwners[i] = item;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies deferred state changes in bulk using UpdateMultiple when supported.
+        /// </summary>
+        /// <remarks>
+        /// The deferred pass revisits records the main pass has already counted, so it keeps its
+        /// own counters and reports them on their own line. Folding them into the block totals
+        /// counted every deferred record twice.
+        /// </remarks>
+        private void FlushDeferredStateChanges(IExecutionContainer container, List<DeferredStateChange> changes)
+        {
+            var notWritten = DropChangesForUnwrittenRecords(container, changes, c => c.ActualId, "state");
+            if (changes.Count == 0)
+            {
+                return;
+            }
+
+            container.Log($"Applying {changes.Count} deferred state changes");
+
+            var applied = 0;
+            var failed = 0;
+            var byEntity = changes.GroupBy(c => c.EntityLogicalName);
+
+            foreach (var group in byEntity)
+            {
+                var entityName = group.Key;
+                var batch = group.ToList();
+
+                if (entityName == "duplicaterule" || entityName == "savedquery")
+                {
+                    ApplyStatesIndividually(container, batch, ref applied, ref failed);
+                    continue;
                 }
 
-                if (nowActive)
+                if (IsUpdateMultipleSupported(container, entityName))
                 {
-                    var updateattributes = cdNewEntity.Attributes.Keys.ToList();
-                    if (updateattributes.Contains(container.Entity(cdNewEntity.LogicalName).PrimaryIdAttribute))
+                    if (TryApplyStatesWithUpdateMultiple(container, entityName, batch, ref applied, ref failed))
                     {
-                        updateattributes.Remove(container.Entity(cdNewEntity.LogicalName).PrimaryIdAttribute);
+                        continue;
                     }
-                    if (updateIdentical || !EntityAttributesEqual(container, updateattributes, cdNewEntity, cdMatchEntity))
+                }
+
+                ApplyStatesIndividually(container, batch, ref applied, ref failed);
+            }
+
+            SendLine(container, "Deferred state changes: {0} applied, {1} failed, {2} skipped", applied, failed, notWritten);
+        }
+
+        /// <summary>
+        /// Removes deferred changes whose record never got an id, and says how many were dropped.
+        /// </summary>
+        /// <remarks>
+        /// A change is still at <see cref="Guid.Empty"/> when the main pass did not write its
+        /// record - no match under UpdateOnly, an ambiguous match, or nothing created. That is a
+        /// normal outcome the main pass has already reported, so there is nothing to apply here
+        /// and nothing to count as a failure.
+        /// </remarks>
+        private int DropChangesForUnwrittenRecords<T>(IExecutionContainer container, List<T> changes, Func<T, Guid> actualId, string kind)
+        {
+            var dropped = changes.RemoveAll(c => actualId(c) == Guid.Empty);
+            if (dropped > 0)
+            {
+                container.Log($"Skipping {dropped} deferred {kind} change(s) for records that were not written");
+            }
+
+            return dropped;
+        }
+
+        /// <summary>
+        /// Attempts to apply state changes using UpdateMultiple.
+        /// </summary>
+        private bool TryApplyStatesWithUpdateMultiple(IExecutionContainer container, string entityName, List<DeferredStateChange> batch, ref int applied, ref int failed)
+        {
+            var targets = new EntityCollection { EntityName = entityName };
+
+            foreach (var change in batch)
+            {
+                var entity = new Entity(entityName, change.ActualId);
+                entity["statecode"] = change.StateCode;
+                entity["statuscode"] = change.StatusCode;
+                targets.Entities.Add(entity);
+            }
+
+            if (targets.Entities.Count == 0)
+            {
+                return true;
+            }
+
+            try
+            {
+                var request = new OrganizationRequest("UpdateMultiple")
+                {
+                    Parameters = { ["Targets"] = targets }
+                };
+                container.Service.Execute(request);
+                applied += targets.Entities.Count;
+                container.Log($"Applied {targets.Entities.Count} state changes via UpdateMultiple for {entityName}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                container.Log($"UpdateMultiple for state changes failed: {ex.Message}");
+                if (stoponerror)
+                {
+                    throw;
+                }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Applies state changes individually using SetState.
+        /// </summary>
+        private void ApplyStatesIndividually(IExecutionContainer container, List<DeferredStateChange> batch, ref int applied, ref int failed)
+        {
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var change = batch[i];
+                try
+                {
+                    var entity = new Entity(change.EntityLogicalName, change.ActualId);
+
+                    if (change.EntityLogicalName == "savedquery" && change.StateCode.Value == 1 && change.StatusCode.Value == 1)
                     {
+                        container.SetState(entity, 1, 2);
+                    }
+                    else if (change.EntityLogicalName == "duplicaterule")
+                    {
+                        if (change.StatusCode.Value == 2)
+                        {
+                            container.PublishDuplicateRule(entity);
+                        }
+                        else
+                        {
+                            container.UnpublishDuplicateRule(entity);
+                        }
+                    }
+                    else
+                    {
+                        container.SetState(entity, change.StateCode.Value, change.StatusCode.Value);
+                    }
+
+                    applied++;
+                    SendLine(container, "{0:000} SetState (deferred): {1}: {2}/{3}", change.Position, change.Identifier, change.StateCode.Value, change.StatusCode.Value);
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} SetState Failed (deferred): {1} {2}", change.Position, change.Identifier, ex.Message);
+                    if (stoponerror)
+                    {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                        throw;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies deferred owner changes in bulk when possible.
+        /// </summary>
+        /// <remarks>See <see cref="FlushDeferredStateChanges"/> for why this keeps its own counters.</remarks>
+        private void FlushDeferredOwnerChanges(IExecutionContainer container, List<DeferredOwnerChange> changes)
+        {
+            var notWritten = DropChangesForUnwrittenRecords(container, changes, c => c.ActualId, "owner");
+            if (changes.Count == 0)
+            {
+                return;
+            }
+
+            container.Log($"Applying {changes.Count} deferred owner changes");
+
+            var applied = 0;
+            var failed = 0;
+
+            for (var i = 0; i < changes.Count; i++)
+            {
+                var change = changes[i];
+                try
+                {
+                    var entity = new Entity(change.EntityLogicalName, change.ActualId);
+                    container.Principal(entity).On(change.Owner).Assign();
+                    applied++;
+                    SendLine(container, "{0:000} Assigned (deferred): {1} to {2} {3}", change.Position, change.Identifier, change.Owner.LogicalName, string.IsNullOrEmpty(change.Owner.Name) ? change.Owner.Id.ToString() : change.Owner.Name);
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Assign Failed (deferred): {1} {2}", change.Position, change.Identifier, ex.Message);
+                    if (stoponerror)
+                    {
+                        container.Log($"StopOnError: aborting, {changes.Count - i - 1} record(s) in this batch were not executed");
+                        throw;
+                    }
+                }
+            }
+
+            SendLine(container, "Deferred owner changes: {0} applied, {1} failed, {2} skipped", applied, failed, notWritten);
+        }
+
+        /// <summary>
+        /// Records which batched record faulted and says whether the flush must abort.
+        /// </summary>
+        /// <remarks>
+        /// Callers keep their own <c>throw;</c> so the original stack survives. The label is what
+        /// the per-record catch in <see cref="ImportDataBlock"/> reports; without it that catch
+        /// names whichever record happened to fill the batch.
+        /// </remarks>
+        private bool StopOnBatchError(int position, string identifier)
+        {
+            if (!stoponerror)
+            {
+                return false;
+            }
+
+            batchFailureLabel = string.Format("{0:000} {1}", position, identifier);
+            return true;
+        }
+
+
+        /// <summary>
+        /// Flushes pending create operations using CreateMultiple when supported, falling back to ExecuteMultiple or individual calls.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="batch">The batch of pending create operations.</param>
+        /// <param name="created">Counter for successfully created records.</param>
+        /// <param name="failed">Counter for failed records.</param>
+        /// <param name="references">Collection to store created entity references.</param>
+        private void FlushPendingCreates(IExecutionContainer container, List<PendingCreate> batch, ref int created, ref int failed, EntityReferenceCollection references)
+        {
+            if (batch.Count == 0)
+            {
+                return;
+            }
+
+            if (batch.Count == 1)
+            {
+                FlushSingleCreate(container, batch[0], ref created, ref failed, references);
+                batch.Clear();
+                return;
+            }
+
+            var entityLogicalName = batch[0].Entity.LogicalName;
+
+            if (IsCreateMultipleSupported(container, entityLogicalName))
+            {
+                if (TryFlushCreatesWithCreateMultiple(container, batch, ref created, ref failed, references))
+                {
+                    batch.Clear();
+                    return;
+                }
+            }
+
+            FlushCreatesWithExecuteMultiple(container, batch, ref created, ref failed, references);
+            batch.Clear();
+        }
+
+        /// <summary>
+        /// Creates a single record.
+        /// </summary>
+        private void FlushSingleCreate(IExecutionContainer container, PendingCreate item, ref int created, ref int failed, EntityReferenceCollection references)
+        {
+            try
+            {
+                container.Create(item.Entity);
+                created++;
+                SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                references.Add(item.Entity.ToEntityReference());
+                RecordCreatedId(item.OldId, item.Entity.Id);
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
+                if (StopOnBatchError(item.Position, item.Identifier))
+                {
+                    throw;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Attempts to flush creates using CreateMultipleRequest (Dataverse bulk API).
+        /// Returns true if successful; false if the message is not supported and fallback is needed.
+        /// </summary>
+        private bool TryFlushCreatesWithCreateMultiple(IExecutionContainer container, List<PendingCreate> batch, ref int created, ref int failed, EntityReferenceCollection references)
+        {
+            var entityLogicalName = batch[0].Entity.LogicalName;
+            var targets = new EntityCollection { EntityName = entityLogicalName };
+            foreach (var item in batch)
+            {
+                targets.Entities.Add(item.Entity);
+            }
+
+            var request = new OrganizationRequest("CreateMultiple")
+            {
+                Parameters = { ["Targets"] = targets }
+            };
+
+            container.Log($"Executing CreateMultiple for {batch.Count} {entityLogicalName} records");
+
+            try
+            {
+                var response = container.Service.Execute(request);
+                var createdIds = response.Results.Contains("Ids") ? (Guid[])response.Results["Ids"] : null;
+
+                for (var i = 0; i < batch.Count; i++)
+                {
+                    var item = batch[i];
+                    if (createdIds != null && i < createdIds.Length)
+                    {
+                        item.Entity.Id = createdIds[i];
+                    }
+                    created++;
+                    SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                    references.Add(item.Entity.ToEntityReference());
+                    RecordCreatedId(item.OldId, item.Entity.Id);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                container.Log($"CreateMultiple failed: {ex.Message}");
+
+                if (IsBulkMessageNotImplemented(ex))
+                {
+                    container.Log("CreateMultiple not implemented, marking as unsupported and falling back");
+                    MarkCreateMultipleUnsupported(entityLogicalName);
+                    return false;
+                }
+
+                // CreateMultiple is a single transactional request, so a fault rolled the whole
+                // batch back and nothing was written. Re-run the rows through the per-record
+                // path even when StopOnError is set: that is the only way to name the record
+                // that actually faulted, and it restores the pre-batching behaviour of
+                // committing the rows ahead of it. FlushCreatesIndividually reports the
+                // failing row and then honours StopOnError itself.
+                container.Log("CreateMultiple batch failed, falling back to individual creates");
+                FlushCreatesIndividually(container, batch, ref created, ref failed, references);
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Flushes creates using ExecuteMultipleRequest (legacy batch approach).
+        /// </summary>
+        private void FlushCreatesWithExecuteMultiple(IExecutionContainer container, List<PendingCreate> batch, ref int created, ref int failed, EntityReferenceCollection references)
+        {
+            var multiRequest = new ExecuteMultipleRequest
+            {
+                Requests = new OrganizationRequestCollection(),
+                Settings = new ExecuteMultipleSettings
+                {
+                    ContinueOnError = !stoponerror,
+                    ReturnResponses = true
+                }
+            };
+
+            foreach (var item in batch)
+            {
+                multiRequest.Requests.Add(new CreateRequest { Target = item.Entity });
+            }
+
+            container.Log($"Executing ExecuteMultiple batch create of {batch.Count} records");
+
+            ExecuteMultipleResponse multiResponse;
+            try
+            {
+                multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
+            }
+            catch (Exception ex)
+            {
+                container.Log($"ExecuteMultiple batch create failed: {ex.Message}");
+                if (stoponerror)
+                {
+                    throw;
+                }
+                container.Log("Falling back to sequential creates");
+                FlushCreatesIndividually(container, batch, ref created, ref failed, references);
+                return;
+            }
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var item = batch[i];
+                var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+
+                if (responseItem == null)
+                {
+                    // ContinueOnError=false makes the platform stop at the first fault, leaving no
+                    // response for the requests after it. Those records were never created.
+                    failed++;
+                    SendLine(container, "{0:000} Create Not Executed: {1}", item.Position, item.Identifier);
+                    continue;
+                }
+                if (responseItem.Fault != null)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, responseItem.Fault.Message);
+                    if (StopOnBatchError(item.Position, item.Identifier))
+                    {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                        throw new InvalidOperationException($"Create failed: {item.Identifier} {responseItem.Fault.Message}");
+                    }
+                    continue;
+                }
+                if (responseItem.Response is CreateResponse createResponse)
+                {
+                    item.Entity.Id = createResponse.id;
+                }
+                created++;
+                SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                references.Add(item.Entity.ToEntityReference());
+                RecordCreatedId(item.OldId, item.Entity.Id);
+            }
+        }
+
+        /// <summary>
+        /// Flushes creates individually (used as fallback when batch operations fail).
+        /// </summary>
+        private void FlushCreatesIndividually(IExecutionContainer container, List<PendingCreate> batch, ref int created, ref int failed, EntityReferenceCollection references)
+        {
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var item = batch[i];
+                try
+                {
+                    container.Create(item.Entity);
+                    created++;
+                    SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                    references.Add(item.Entity.ToEntityReference());
+                    RecordCreatedId(item.OldId, item.Entity.Id);
+                }
+                catch (Exception itemEx)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, itemEx.Message);
+                    if (StopOnBatchError(item.Position, item.Identifier))
+                    {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                        throw;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Flushes pending update operations using UpdateMultiple when supported, falling back to ExecuteMultiple or individual calls.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="batch">The batch of pending update operations.</param>
+        /// <param name="updated">Counter for successfully updated records.</param>
+        /// <param name="failed">Counter for failed records.</param>
+        /// <param name="references">Collection to store updated entity references.</param>
+        private void FlushPendingUpdates(IExecutionContainer container, List<PendingUpdate> batch, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            if (batch.Count == 0)
+            {
+                return;
+            }
+
+            if (batch.Count == 1)
+            {
+                FlushSingleUpdate(container, batch[0], ref updated, ref failed, references);
+                batch.Clear();
+                return;
+            }
+
+            var entityLogicalName = batch[0].Entity.LogicalName;
+
+            if (IsUpdateMultipleSupported(container, entityLogicalName))
+            {
+                if (TryFlushUpdatesWithUpdateMultiple(container, batch, ref updated, ref failed, references))
+                {
+                    batch.Clear();
+                    return;
+                }
+            }
+
+            FlushUpdatesWithExecuteMultiple(container, batch, ref updated, ref failed, references);
+            batch.Clear();
+        }
+
+        /// <summary>
+        /// Updates a single record.
+        /// </summary>
+        private void FlushSingleUpdate(IExecutionContainer container, PendingUpdate item, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            try
+            {
+                container.Update(item.Entity);
+                updated++;
+                SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                references.Add(item.Entity.ToEntityReference());
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, ex.Message);
+                if (StopOnBatchError(item.Position, item.Identifier))
+                {
+                    throw;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Attempts to flush updates using UpdateMultipleRequest (Dataverse bulk API).
+        /// Returns true if successful; false if the message is not supported and fallback is needed.
+        /// </summary>
+        private bool TryFlushUpdatesWithUpdateMultiple(IExecutionContainer container, List<PendingUpdate> batch, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            var entityLogicalName = batch[0].Entity.LogicalName;
+            var targets = new EntityCollection { EntityName = entityLogicalName };
+            foreach (var item in batch)
+            {
+                targets.Entities.Add(item.Entity);
+            }
+
+            var request = new OrganizationRequest("UpdateMultiple")
+            {
+                Parameters = { ["Targets"] = targets }
+            };
+
+            container.Log($"Executing UpdateMultiple for {batch.Count} {entityLogicalName} records");
+
+            try
+            {
+                container.Service.Execute(request);
+
+                foreach (var item in batch)
+                {
+                    updated++;
+                    SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                    references.Add(item.Entity.ToEntityReference());
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                container.Log($"UpdateMultiple failed: {ex.Message}");
+
+                if (IsBulkMessageNotImplemented(ex))
+                {
+                    container.Log("UpdateMultiple not implemented, marking as unsupported and falling back");
+                    MarkUpdateMultipleUnsupported(entityLogicalName);
+                    return false;
+                }
+
+                // UpdateMultiple is a single transactional request, so a fault rolled the whole
+                // batch back and nothing was written. Re-run the rows through the per-record
+                // path even when StopOnError is set: that is the only way to name the record
+                // that actually faulted, and it restores the pre-batching behaviour of
+                // committing the rows ahead of it. FlushUpdatesIndividually reports the
+                // failing row and then honours StopOnError itself.
+                container.Log("UpdateMultiple batch failed, falling back to individual updates");
+                FlushUpdatesIndividually(container, batch, ref updated, ref failed, references);
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Flushes updates using ExecuteMultipleRequest (legacy batch approach).
+        /// </summary>
+        private void FlushUpdatesWithExecuteMultiple(IExecutionContainer container, List<PendingUpdate> batch, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            var multiRequest = new ExecuteMultipleRequest
+            {
+                Requests = new OrganizationRequestCollection(),
+                Settings = new ExecuteMultipleSettings
+                {
+                    ContinueOnError = !stoponerror,
+                    ReturnResponses = true
+                }
+            };
+
+            foreach (var item in batch)
+            {
+                multiRequest.Requests.Add(new UpdateRequest { Target = item.Entity });
+            }
+
+            container.Log($"Executing ExecuteMultiple batch update of {batch.Count} records");
+
+            ExecuteMultipleResponse multiResponse;
+            try
+            {
+                multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
+            }
+            catch (Exception ex)
+            {
+                container.Log($"ExecuteMultiple batch update failed: {ex.Message}");
+                if (stoponerror)
+                {
+                    throw;
+                }
+                container.Log("Falling back to sequential updates");
+                FlushUpdatesIndividually(container, batch, ref updated, ref failed, references);
+                return;
+            }
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var item = batch[i];
+                var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+
+                if (responseItem == null)
+                {
+                    // ContinueOnError=false makes the platform stop at the first fault, leaving no
+                    // response for the requests after it. Those records were never updated.
+                    failed++;
+                    SendLine(container, "{0:000} Update Not Executed: {1} {2}", item.Position, item.Identifier, item.Entity.LogicalName);
+                    continue;
+                }
+                if (responseItem.Fault != null)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, responseItem.Fault.Message);
+                    if (StopOnBatchError(item.Position, item.Identifier))
+                    {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                        throw new InvalidOperationException($"Update failed: {item.Identifier} {responseItem.Fault.Message}");
+                    }
+                    continue;
+                }
+                updated++;
+                SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                references.Add(item.Entity.ToEntityReference());
+            }
+        }
+
+        /// <summary>
+        /// Flushes updates individually (used as fallback when batch operations fail).
+        /// </summary>
+        private void FlushUpdatesIndividually(IExecutionContainer container, List<PendingUpdate> batch, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var item = batch[i];
+                try
+                {
+                    container.Update(item.Entity);
+                    updated++;
+                    SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                    references.Add(item.Entity.ToEntityReference());
+                }
+                catch (Exception itemEx)
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Update Failed: {1} {2} {3}", item.Position, item.Identifier, item.Entity.LogicalName, itemEx.Message);
+                    if (StopOnBatchError(item.Position, item.Identifier))
+                    {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                        throw;
+                    }
+                }
+            }
+        }
+
+        #region Upsert Operations
+
+        /// <summary>
+        /// Flushes pending upsert operations using UpsertMultiple when supported, falling back to ExecuteMultiple with Upsert, 
+        /// then individual Upsert, then individual Create/Update.
+        /// </summary>
+        /// <param name="container">The execution container.</param>
+        /// <param name="batch">The batch of pending upsert operations.</param>
+        /// <param name="created">Counter for successfully created records.</param>
+        /// <param name="updated">Counter for successfully updated records.</param>
+        /// <param name="failed">Counter for failed records.</param>
+        /// <param name="references">Collection to store entity references.</param>
+        private void FlushPendingUpserts(IExecutionContainer container, List<PendingUpsert> batch, ref int created, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            if (batch.Count == 0)
+            {
+                return;
+            }
+
+            if (batch.Count == 1)
+            {
+                FlushSingleUpsert(container, batch[0], ref created, ref updated, ref failed, references);
+                batch.Clear();
+                return;
+            }
+
+            var entityLogicalName = batch[0].Entity.LogicalName;
+
+            // Neither Upsert nor UpsertMultiple is reported as supported for the custom entities
+            // tested so far, on either an on-premises 9.1 org or an online one, so both paths below
+            // currently fall straight through to Create/Update. They are kept because support is
+            // per-entity: several out-of-the-box tables already carry Upsert, and Microsoft enables
+            // the bulk messages on more tables over time. Detection is per entity and cached, so an
+            // org that gains support starts using it with no change here.
+            if (IsUpsertMultipleSupported(container, entityLogicalName))
+            {
+                if (TryFlushUpsertsWithUpsertMultiple(container, batch, ref created, ref updated, ref failed, references))
+                {
+                    batch.Clear();
+                    return;
+                }
+            }
+
+            if (IsUpsertSupported(container, entityLogicalName))
+            {
+                if (TryFlushUpsertsWithExecuteMultiple(container, batch, ref created, ref updated, ref failed, references))
+                {
+                    batch.Clear();
+                    return;
+                }
+            }
+
+            // Final fallback: individual Create/Update operations
+            FlushUpsertsAsCreateUpdate(container, batch, ref created, ref updated, ref failed, references);
+            batch.Clear();
+        }
+
+        /// <summary>
+        /// Upserts a single record.
+        /// </summary>
+        private void FlushSingleUpsert(IExecutionContainer container, PendingUpsert item, ref int created, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            var entityLogicalName = item.Entity.LogicalName;
+
+            if (IsUpsertSupported(container, entityLogicalName))
+            {
+                try
+                {
+                    var request = new UpsertRequest { Target = item.Entity };
+                    var response = (UpsertResponse)container.Service.Execute(request);
+
+                    if (response.RecordCreated)
+                    {
+                        if (response.Target != null)
+                        {
+                            item.Entity.Id = response.Target.Id;
+                        }
+                        created++;
+                        SendLine(container, "{0:000} Created (upsert): {1}", item.Position, item.Identifier);
+                    }
+                    else
+                    {
+                        updated++;
+                        SendLine(container, "{0:000} Updated (upsert): {1}", item.Position, item.Identifier);
+                    }
+                    references.Add(item.Entity.ToEntityReference());
+                    MapGuid(item.OldId, item.Entity.Id);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    if (IsBulkMessageNotImplemented(ex))
+                    {
+                        container.Log($"Upsert not implemented for {entityLogicalName}, falling back to Create/Update");
+                        MarkUpsertUnsupported(entityLogicalName);
+                    }
+                    else
+                    {
+                        failed++;
+                        SendLine(container, "{0:000} Upsert Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
+                        if (StopOnBatchError(item.Position, item.Identifier))
+                        {
+                            throw;
+                        }
+                        return;
+                    }
+                }
+            }
+
+            // Same fallback as a batch: Create, and Update if the record already exists. Create
+            // alone would fail every record that is already in the target.
+            FlushUpsertsAsCreateUpdate(container, new List<PendingUpsert> { item }, ref created, ref updated, ref failed, references);
+        }
+
+        /// <summary>
+        /// Attempts to flush upserts using UpsertMultipleRequest (Dataverse bulk API).
+        /// Returns true if successful; false if the message is not supported and fallback is needed.
+        /// </summary>
+        private bool TryFlushUpsertsWithUpsertMultiple(IExecutionContainer container, List<PendingUpsert> batch, ref int created, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            var entityLogicalName = batch[0].Entity.LogicalName;
+            var targets = new EntityCollection { EntityName = entityLogicalName };
+            foreach (var item in batch)
+            {
+                targets.Entities.Add(item.Entity);
+            }
+
+            var request = new OrganizationRequest("UpsertMultiple")
+            {
+                Parameters = { ["Targets"] = targets }
+            };
+
+            container.Log($"Executing UpsertMultiple for {batch.Count} {entityLogicalName} records");
+
+            try
+            {
+                var response = container.Service.Execute(request);
+                var results = response.Results.Contains("Results") ? (UpsertResponse[])response.Results["Results"] : null;
+
+                for (var i = 0; i < batch.Count; i++)
+                {
+                    var item = batch[i];
+                    var upsertResult = results != null && i < results.Length ? results[i] : null;
+
+                    if (upsertResult != null)
+                    {
+                        if (upsertResult.RecordCreated)
+                        {
+                            if (upsertResult.Target != null)
+                            {
+                                item.Entity.Id = upsertResult.Target.Id;
+                            }
+                            created++;
+                            SendLine(container, "{0:000} Created (upsert): {1}", item.Position, item.Identifier);
+                        }
+                        else
+                        {
+                            updated++;
+                            SendLine(container, "{0:000} Updated (upsert): {1}", item.Position, item.Identifier);
+                        }
+                    }
+                    else
+                    {
+                        // If no result available, count as updated (default upsert behavior)
+                        updated++;
+                        SendLine(container, "{0:000} Upserted: {1}", item.Position, item.Identifier);
+                    }
+                    references.Add(item.Entity.ToEntityReference());
+                    MapGuid(item.OldId, item.Entity.Id);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                container.Log($"UpsertMultiple failed: {ex.Message}");
+
+                if (IsBulkMessageNotImplemented(ex))
+                {
+                    container.Log("UpsertMultiple not implemented, marking as unsupported and falling back");
+                    MarkUpsertMultipleUnsupported(entityLogicalName);
+                    return false;
+                }
+
+                // UpsertMultiple is a single transactional request, so a fault rolled the whole
+                // batch back and nothing was written. Re-run the rows through the per-record
+                // path even when StopOnError is set: that is the only way to name the record
+                // that actually faulted, and it restores the pre-batching behaviour of
+                // committing the rows ahead of it. TryFlushUpsertsWithExecuteMultiple reports the
+                // failing row and then honours StopOnError itself.
+                container.Log("UpsertMultiple batch failed, falling back to ExecuteMultiple with Upsert");
+                // Try ExecuteMultiple with individual Upsert requests
+                return TryFlushUpsertsWithExecuteMultiple(container, batch, ref created, ref updated, ref failed, references);
+            }
+        }
+
+        /// <summary>
+        /// Flushes upserts using ExecuteMultipleRequest with individual UpsertRequest items.
+        /// Returns true if successful; false if Upsert is not supported and fallback is needed.
+        /// </summary>
+        private bool TryFlushUpsertsWithExecuteMultiple(IExecutionContainer container, List<PendingUpsert> batch, ref int created, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            var entityLogicalName = batch[0].Entity.LogicalName;
+            var multiRequest = new ExecuteMultipleRequest
+            {
+                Requests = new OrganizationRequestCollection(),
+                Settings = new ExecuteMultipleSettings
+                {
+                    ContinueOnError = !stoponerror,
+                    ReturnResponses = true
+                }
+            };
+
+            foreach (var item in batch)
+            {
+                multiRequest.Requests.Add(new UpsertRequest { Target = item.Entity });
+            }
+
+            container.Log($"Executing ExecuteMultiple with UpsertRequest for {batch.Count} {entityLogicalName} records");
+
+            ExecuteMultipleResponse multiResponse;
+            try
+            {
+                multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
+            }
+            catch (Exception ex)
+            {
+                container.Log($"ExecuteMultiple with Upsert failed: {ex.Message}");
+
+                if (IsBulkMessageNotImplemented(ex))
+                {
+                    container.Log("Upsert not implemented, marking as unsupported and falling back");
+                    MarkUpsertUnsupported(entityLogicalName);
+                    return false;
+                }
+
+                // The request itself failed, so no item was applied. Upsert is idempotent, so
+                // re-running the batch as Create/Update is safe and is the only way to name the
+                // failing record. FlushUpsertsAsCreateUpdate honours StopOnError itself.
+                container.Log("Falling back to individual Create/Update operations");
+                FlushUpsertsAsCreateUpdate(container, batch, ref created, ref updated, ref failed, references);
+                return true;
+            }
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var item = batch[i];
+                var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+
+                if (responseItem == null)
+                {
+                    // ContinueOnError=false makes the platform stop at the first fault, leaving no
+                    // response for the requests after it. Those records were never upserted.
+                    failed++;
+                    SendLine(container, "{0:000} Upsert Not Executed: {1}", item.Position, item.Identifier);
+                    continue;
+                }
+                if (responseItem.Fault != null)
+                {
+                    // Check if fault indicates Upsert not implemented
+                    if (responseItem.Fault.ErrorCode == MessageNotImplementedErrorCode)
+                    {
+                        container.Log("Upsert not implemented, marking as unsupported and falling back to Create/Update");
+                        MarkUpsertUnsupported(entityLogicalName);
+                        return false;
+                    }
+                    failed++;
+                    SendLine(container, "{0:000} Upsert Failed: {1} {2}", item.Position, item.Identifier, responseItem.Fault.Message);
+                    if (StopOnBatchError(item.Position, item.Identifier))
+                    {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                        throw new InvalidOperationException($"Upsert failed: {item.Identifier} {responseItem.Fault.Message}");
+                    }
+                    continue;
+                }
+                if (!(responseItem.Response is UpsertResponse upsertResponse))
+                {
+                    failed++;
+                    SendLine(container, "{0:000} Upsert Failed: {1} unexpected response {2}", item.Position, item.Identifier, responseItem.Response?.GetType().Name ?? "(none)");
+                    continue;
+                }
+                if (upsertResponse.RecordCreated)
+                {
+                    if (upsertResponse.Target != null)
+                    {
+                        item.Entity.Id = upsertResponse.Target.Id;
+                    }
+                    created++;
+                    SendLine(container, "{0:000} Created (upsert): {1}", item.Position, item.Identifier);
+                }
+                else
+                {
+                    updated++;
+                    SendLine(container, "{0:000} Updated (upsert): {1}", item.Position, item.Identifier);
+                }
+                references.Add(item.Entity.ToEntityReference());
+                MapGuid(item.OldId, item.Entity.Id);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Flushes upserts using individual Create/Update operations (final fallback for CRM 8.x and older).
+        /// Since we don't have match results, we attempt Create first and fall back to Update on duplicate key error.
+        /// </summary>
+        private void FlushUpsertsAsCreateUpdate(IExecutionContainer container, List<PendingUpsert> batch, ref int created, ref int updated, ref int failed, EntityReferenceCollection references)
+        {
+            container.Log($"Falling back to Create/Update for {batch.Count} records (Upsert not available)");
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var item = batch[i];
+                try
+                {
+                    // Attempt Create first
+                    container.Create(item.Entity);
+                    created++;
+                    SendLine(container, "{0:000} Created: {1}", item.Position, item.Identifier);
+                    references.Add(item.Entity.ToEntityReference());
+                    MapGuid(item.OldId, item.Entity.Id);
+                }
+                catch (FaultException<OrganizationServiceFault> createEx)
+                {
+                    // Check for duplicate key error (record exists)
+                    if (createEx.Detail?.ErrorCode == -2147220937 || // DuplicateRecordEntityKey
+                        createEx.Detail?.ErrorCode == -2147220685 || // DuplicateRecord
+                        createEx.Message.Contains("duplicate") ||
+                        createEx.Message.Contains("already exists"))
+                    {
+                        // Record exists, try Update instead
                         try
                         {
-                            container.Update(cdNewEntity);
-                            recordSaved = true;
-                            SendLine(container, "{0:000} Updated: {1}", pos, identifier);
+                            container.Update(item.Entity);
+                            updated++;
+                            SendLine(container, "{0:000} Updated: {1}", item.Position, item.Identifier);
+                            references.Add(item.Entity.ToEntityReference());
+                            MapGuid(item.OldId, item.Entity.Id);
                         }
-                        catch (Exception)
+                        catch (Exception updateEx)
                         {
-                            recordSaved = false;
-                            SendLine(container, "{0:000} Update Failed: {1} {2} {3}", pos, identifier, cdNewEntity.LogicalName);
+                            failed++;
+                            SendLine(container, "{0:000} Update Failed (fallback): {1} {2}", item.Position, item.Identifier, updateEx.Message);
+                            if (StopOnBatchError(item.Position, item.Identifier))
+                            {
+                                container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                                throw;
+                            }
                         }
                     }
                     else
                     {
-                        SendLine(container, "{0:000} Skipped: {1} (Identical)", pos, identifier);
+                        failed++;
+                        SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, createEx.Message);
+                        if (StopOnBatchError(item.Position, item.Identifier))
+                        {
+                            container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                            throw;
+                        }
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    SendLine(container, "{0:000} Inactive: {1}", pos, identifier);
-                }
-                if (newOwner != null && !newOwner.Equals(cdMatchEntity.GetAttribute("ownerid", new EntityReference())))
-                {
-                    container.Principal(cdNewEntity).On(newOwner).Assign();
-
-                    // cdNewEntity.Assign(newOwner);
-                    SendLine(container, "{0:000} Assigned: {1} to {2} {3}", pos, identifier, newOwner.LogicalName, string.IsNullOrEmpty(newOwner.Name) ? newOwner.Id.ToString() : newOwner.Name);
+                    failed++;
+                    SendLine(container, "{0:000} Create Failed: {1} {2}", item.Position, item.Identifier, ex.Message);
+                    if (StopOnBatchError(item.Position, item.Identifier))
+                    {
+                        container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                        throw;
+                    }
                 }
             }
-            if (newActive != nowActive)
-            {   // Active should be changed on the record
-                var newStatusValue = newStatus.Value;
-                if (cdNewEntity.LogicalName == "savedquery" && newState.Value == 1 && newStatusValue == 1)
-                {   // Adjustment for inactive but unpublished view
-                    newStatusValue = 2;
-                }
-                if (cdNewEntity.LogicalName == "duplicaterule")
+        }
+
+        #endregion Upsert Operations
+
+        private void FlushPendingDeletes(IExecutionContainer container, List<Entity> batch, ref int deleted, ref int failed)
+        {
+            if (batch.Count == 0)
+            {
+                return;
+            }
+            if (batch.Count == 1)
+            {
+                container.Delete(batch[0]);
+                deleted++;
+                batch.Clear();
+                return;
+            }
+            var multiRequest = new ExecuteMultipleRequest
+            {
+                Requests = new OrganizationRequestCollection(),
+                Settings = new ExecuteMultipleSettings
                 {
-                    if (newStatusValue == 2)
+                    ContinueOnError = !stoponerror,
+                    ReturnResponses = true
+                }
+            };
+            foreach (var entity in batch)
+            {
+                multiRequest.Requests.Add(new DeleteRequest { Target = entity.ToEntityReference() });
+            }
+            container.Log($"Executing batch delete of {batch.Count} records");
+            ExecuteMultipleResponse multiResponse;
+            try
+            {
+                multiResponse = (ExecuteMultipleResponse)container.Service.Execute(multiRequest);
+            }
+            catch (Exception ex)
+            {
+                container.Log($"Batch delete failed: {ex.Message}");
+                container.Log("Falling back to sequential deletes");
+                foreach (var entity in batch)
+                {
+                    try
                     {
-                        container.PublishDuplicateRule(cdNewEntity);
-                        SendLine(container, "{0:000} Publish Duplicate Rule: {1}", pos, identifier);
+                        container.Delete(entity);
+                        deleted++;
+                    }
+                    catch (FaultException<OrganizationServiceFault> fex)
+                    {
+                        if (fex.Message.ToUpperInvariant().Contains("DOES NOT EXIST"))
+                        {
+                            SendLine(container, "      ...already deleted");
+                        }
+                        else
+                        {
+                            throw;
+                        }
+                    }
+                }
+                batch.Clear();
+                return;
+            }
+
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var responseItem = multiResponse.Responses.FirstOrDefault(r => r.RequestIndex == i);
+                if (responseItem == null)
+                {
+                    // ContinueOnError=false makes the platform stop at the first fault, leaving no
+                    // response for the requests after it. Those records were never deleted.
+                    failed++;
+                    SendLine(container, "Delete Not Executed: {0}", batch[i].LogicalName);
+                    continue;
+                }
+                if (responseItem.Fault != null)
+                {
+                    if (responseItem.Fault.Message.ToUpperInvariant().Contains("DOES NOT EXIST"))
+                    {
+                        SendLine(container, "      ...already deleted");
                     }
                     else
                     {
-                        container.UnpublishDuplicateRule(cdNewEntity);
-                        SendLine(container, "{0:000} Unpublish Duplicate Rule: {1}", pos, identifier);
+                        failed++;
+                        SendLine(container, "Delete Failed: {0} {1}", batch[i].LogicalName, responseItem.Fault.Message);
+                        if (stoponerror)
+                        {
+                            container.Log($"StopOnError: aborting, {batch.Count - i - 1} record(s) in this batch were not executed");
+                            throw new InvalidOperationException($"Delete failed: {batch[i].LogicalName} {responseItem.Fault.Message}");
+                        }
                     }
+                    continue;
                 }
-                else
-                {
-                    container.SetState(cdNewEntity, newState.Value, newStatusValue);
-                    SendLine(container, "{0:000} SetState: {1}: {2}/{3}", pos, identifier, newState.Value, newStatus.Value);
-                }
+                deleted++;
             }
-            container.EndSection();
-            return recordSaved;
+            batch.Clear();
         }
+
+        private void MapGuid(Guid oldId, Guid newId)
+        {
+            if (!oldId.Equals(Guid.Empty) && !newId.Equals(Guid.Empty) && !oldId.Equals(newId) && !guidmap.ContainsKey(oldId))
+            {
+                guidmap.Add(oldId, newId);
+            }
+        }
+
+        /// <summary>
+        /// Records the actual id of a created record: maps it for later lookup remapping, and fills in
+        /// the id of any deferred state or owner change waiting for that record.
+        /// The import loop only does this itself for records it created inline; a record created from a
+        /// batch has no id at that point, so the flush methods must do it here instead.
+        /// This is deliberately not folded into <see cref="MapGuid"/>: the guid map skips ids that are
+        /// unchanged or already mapped, but a deferred change still needs its id in both those cases.
+        /// </summary>
+        private void RecordCreatedId(Guid oldId, Guid newId)
+        {
+            MapGuid(oldId, newId);
+            if (!oldId.Equals(Guid.Empty) && !newId.Equals(Guid.Empty))
+            {
+                UpdateDeferredActualIds(oldId, newId);
+            }
+        }
+
+        /// <summary>
+        /// Determines if a record can be saved with a simple Create or Update (no state changes, no owner reassignment).
+        /// </summary>
+        private static bool IsBatchable(Entity entity)
+        {
+            return !entity.Contains("statecode") && !entity.Contains("statuscode") && !entity.Contains("ownerid");
+        }
+
+        #endregion Batch Helpers
 
         #endregion Private Methods
     }

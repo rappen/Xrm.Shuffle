@@ -556,7 +556,7 @@
                 msg = string.Format(msg, args);
                 if (msg.Length > 1)
                 {
-                    container.Log(msg, args);
+                    container.Log(msg);
                 }
             }
             OnRaiseShuffleEvent(new ShuffleEventArgs(msg, totalBlocks, currentBlock, blockRecords, currentRecord, replacelast));
