@@ -10,6 +10,7 @@
     using Microsoft.Xrm.Sdk.Query;
     using System;
     using System.Collections.Generic;
+    using System.Globalization;
     using System.IO;
     using System.Linq;
     using System.Reflection;
@@ -100,8 +101,26 @@
                 : TargetAttributeValue(container, entity, attr);
 
         /// <summary>The value of a target record's attribute as compared when matching.</summary>
-        private static string TargetAttributeValue(IExecutionContainer container, Entity entity, string attr) =>
-            container.AttributeAsBaseType(entity, attr, "<null>", true)?.ToString() ?? "<null>";
+        private static string TargetAttributeValue(IExecutionContainer container, Entity entity, string attr)
+        {
+            var value = container.AttributeAsBaseType(entity, attr, "<null>", true);
+            return value is DateTime date ? ComparableDate(date) : value?.ToString() ?? "<null>";
+        }
+
+        /// <summary>
+        /// A date as compared when matching: the same moment must give the same text whichever
+        /// side it came from.
+        /// </summary>
+        /// <remarks>
+        /// A date read from a data file is Local - written as UTC, passed on in the machine's time.
+        /// Dataverse returns Utc for user-local columns and the bare clock time (Unspecified) for
+        /// date-only and time-zone independent ones. Local is brought back to UTC; Unspecified is
+        /// left alone, since converting it would treat it as local. Dataverse stores whole
+        /// seconds, so fractions are dropped.
+        /// </remarks>
+        private static string ComparableDate(DateTime date) =>
+            (date.Kind == DateTimeKind.Local ? date.ToUniversalTime() : date)
+                .ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture);
 
         /// <summary>
         /// A key that is equal for two records exactly when EntityAttributesEqual would call them

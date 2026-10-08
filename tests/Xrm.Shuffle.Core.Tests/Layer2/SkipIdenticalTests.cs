@@ -3,6 +3,7 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Layer2
     using System;
     using System.Linq;
     using Cinteros.Crm.Utils.Shuffle.Tests.Helpers;
+    using global::Xrm.Utils.Core.Common.Extensions;
     using Microsoft.Xrm.Sdk;
     using NUnit.Framework;
 
@@ -48,6 +49,95 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Layer2
                 collection.Entities.Add(entity);
             }
             return collection;
+        }
+
+        /// <summary>A source record with a date as read from a data file.</summary>
+        private static Entity SourceWithDate(Guid id, string name, string fileText)
+        {
+            var entity = Source(id, name);
+            entity.SetAttribute(new TestExecutionContainer(null), "lastusedincampaign", "DateTime", fileText);
+            return entity;
+        }
+
+        private static Entity SeededWithDate(Guid id, string name, DateTime date)
+        {
+            var entity = Seeded("account", id, name);
+            entity["lastusedincampaign"] = date;
+            return entity;
+        }
+
+        /// <summary>
+        /// A data file date is read as UTC and passed on in local time, while Dataverse returns a
+        /// user-local column in UTC. Compared as text the same moment read 14:30 against 12:30,
+        /// so a record with a date column was never identical.
+        /// </summary>
+        [TestCase(true)]
+        [TestCase(false)]
+        public void A_user_local_date_that_has_not_changed_is_identical(bool preRetrieveAll)
+        {
+            using (LocalTimeZone.Stockholm())
+            {
+                Online().WithEntity(SeededWithDate(Id(101), "Alpha", new DateTime(2026, 10, 5, 12, 30, 0, DateTimeKind.Utc)));
+
+                var outcome = NewShuffler().TestImportDataBlock(
+                    DefinitionXml.DataBlock("Accounts", "account").BatchSize(10).MatchOn("name", preRetrieveAll).DeserializeBlock(),
+                    Collection(SourceWithDate(Id(1), "Alpha", "2026-10-05T12:30:00.0000000Z")));
+
+                Assert.That(outcome.Skipped, Is.EqualTo(1), DumpAll());
+                Assert.That(outcome.Updated, Is.EqualTo(0), DumpAll());
+            }
+        }
+
+        /// <summary>
+        /// Date-only and time-zone independent columns come back as the bare clock time, and the
+        /// data file holds it without a zone.
+        /// </summary>
+        [Test]
+        public void A_date_only_value_that_has_not_changed_is_identical()
+        {
+            using (LocalTimeZone.Stockholm())
+            {
+                Online().WithEntity(SeededWithDate(Id(101), "Alpha", new DateTime(2016, 9, 29, 0, 0, 0, DateTimeKind.Unspecified)));
+
+                var outcome = NewShuffler().TestImportDataBlock(
+                    MatchOnName(),
+                    Collection(SourceWithDate(Id(1), "Alpha", "2016-09-29T00:00:00.0000000")));
+
+                Assert.That(outcome.Skipped, Is.EqualTo(1), DumpAll());
+            }
+        }
+
+        /// <summary>Dataverse keeps whole seconds, so a fraction in the file is no change.</summary>
+        [Test]
+        public void A_fraction_of_a_second_is_not_a_difference()
+        {
+            using (LocalTimeZone.Stockholm())
+            {
+                Online().WithEntity(SeededWithDate(Id(101), "Alpha", new DateTime(2026, 10, 5, 12, 30, 0, DateTimeKind.Utc)));
+
+                var outcome = NewShuffler().TestImportDataBlock(
+                    MatchOnName(),
+                    Collection(SourceWithDate(Id(1), "Alpha", "2026-10-05T12:30:00.4000000Z")));
+
+                Assert.That(outcome.Skipped, Is.EqualTo(1), DumpAll());
+            }
+        }
+
+        /// <summary>The other side of the fix: a date that really moved is still written.</summary>
+        [Test]
+        public void A_date_that_changed_by_an_hour_is_updated()
+        {
+            using (LocalTimeZone.Stockholm())
+            {
+                Online().WithEntity(SeededWithDate(Id(101), "Alpha", new DateTime(2026, 10, 5, 12, 30, 0, DateTimeKind.Utc)));
+
+                var outcome = NewShuffler().TestImportDataBlock(
+                    MatchOnName(),
+                    Collection(SourceWithDate(Id(1), "Alpha", "2026-10-05T13:30:00.0000000Z")));
+
+                Assert.That(outcome.Updated, Is.EqualTo(1), DumpAll());
+                Assert.That(outcome.Skipped, Is.EqualTo(0), DumpAll());
+            }
         }
 
         [Test]
