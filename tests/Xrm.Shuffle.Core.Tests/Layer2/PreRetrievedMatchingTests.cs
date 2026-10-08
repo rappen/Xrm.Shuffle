@@ -1,7 +1,9 @@
 ﻿namespace Cinteros.Crm.Utils.Shuffle.Tests.Layer2
 {
+    using System;
     using System.Linq;
     using Cinteros.Crm.Utils.Shuffle.Tests.Helpers;
+    using global::Xrm.Utils.Core.Common.Extensions;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Query;
     using NUnit.Framework;
@@ -56,6 +58,36 @@
             Assert.That(Org.Rows("account").Count, Is.EqualTo(targets), "no duplicate should have been created");
             Assert.That(AccountQueries(), Is.EqualTo(2), "the snapshot should be read as two pages");
             Assert.That(Org.Logger.Logged("Pre-retrieved " + targets + " records for matching"), DumpAll());
+        }
+
+        /// <summary>
+        /// A Match on a date column builds its key from the same comparable text as the identical
+        /// check: a file date (local) and the stored date (UTC) of the same moment must meet, or
+        /// the record is created a second time.
+        /// </summary>
+        [Test]
+        public void A_match_on_a_date_column_finds_the_existing_record()
+        {
+            using (LocalTimeZone.Stockholm())
+            {
+                var existing = Seeded("account", Id(101), "Alpha");
+                existing["lastusedincampaign"] = new DateTime(2026, 10, 5, 12, 30, 0, DateTimeKind.Utc);
+                Online().WithEntity(existing);
+                var source = Record("account", Id(1), "Alpha");
+                source.SetAttribute(new TestExecutionContainer(null), "lastusedincampaign", "DateTime", "2026-10-05T12:30:00.0000000Z");
+
+                var outcome = NewShuffler().TestImportDataBlock(
+                    DefinitionXml.DataBlock("Accounts", "account")
+                        .BatchSize(10)
+                        .ImportAttribute("UpdateIdentical", "true")
+                        .MatchOn("lastusedincampaign")
+                        .DeserializeBlock(),
+                    Sources(source));
+
+                Assert.That(outcome.Created, Is.EqualTo(0), DumpAll());
+                Assert.That(outcome.Updated, Is.EqualTo(1), DumpAll());
+                Assert.That(Org.Rows("account").Count, Is.EqualTo(1), "no duplicate should have been created");
+            }
         }
 
         [Test]

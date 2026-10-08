@@ -30,6 +30,7 @@ Import
 - Failed records in a batch are logged with row and server message, and never counted as saved.
 - Multi-select choice columns (OptionSetValueCollection) export and import correctly.
 - Floating point (Double) columns can be imported from every format, not only Full.
+- Records with date columns are now skipped as identical when nothing changed, and a Match on a date column finds the existing record instead of creating a duplicate.
 
 Runner
 - The import no longer waits for the window to repaint after every record, which made large blocks several times slower.
