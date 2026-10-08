@@ -9,6 +9,8 @@
     <Import_RootNamespace>Innofactor.Crm.Shuffle</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)BypassContainer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)BypassLogicService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CintContainer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Const.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PreRetrievedMatches.cs" />

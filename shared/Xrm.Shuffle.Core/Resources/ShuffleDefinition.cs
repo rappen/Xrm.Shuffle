@@ -829,8 +829,26 @@ namespace Cinteros.Crm.Utils.Shuffle.Types {
         [System.ComponentModel.DefaultValueAttribute(false)]
         public bool StopOnError;
         
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        [System.ComponentModel.DefaultValueAttribute(false)]
+        public bool BypassSyncLogic;
+        
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        [System.ComponentModel.DefaultValueAttribute(false)]
+        public bool BypassAsyncLogic;
+        
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        [System.ComponentModel.DefaultValueAttribute(false)]
+        public bool BypassFlows;
+        
         public ShuffleDefinition() {
             this.StopOnError = false;
+            this.BypassSyncLogic = false;
+            this.BypassAsyncLogic = false;
+            this.BypassFlows = false;
         }
     }
 }

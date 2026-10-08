@@ -22,6 +22,7 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
         private readonly List<DataBlockBuilder> blocks = new List<DataBlockBuilder>();
         private bool? stopOnError;
         private int? timeout;
+        private readonly List<string> rootAttributes = new List<string>();
 
         /// <summary>Starts a definition with one data block already open.</summary>
         public static DataBlockBuilder DataBlock(string name, string entityLogicalName)
@@ -51,6 +52,13 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
             return this;
         }
 
+        /// <summary>Sets any other definition-level attribute, such as BypassSyncLogic.</summary>
+        public DefinitionXml Attribute(string attribute, string value)
+        {
+            rootAttributes.Add(string.Format(CultureInfo.InvariantCulture, " {0}=\"{1}\"", attribute, value));
+            return this;
+        }
+
         /// <summary>Renders the definition as XML.</summary>
         public XmlDocument Build()
         {
@@ -63,6 +71,10 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
             if (timeout.HasValue)
             {
                 xml.Append(" Timeout=\"").Append(timeout.Value.ToString(CultureInfo.InvariantCulture)).Append("\"");
+            }
+            foreach (var attribute in rootAttributes)
+            {
+                xml.Append(attribute);
             }
             xml.Append("><Blocks>");
             foreach (var block in blocks)
@@ -155,6 +167,13 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
                 preRetrieveAll = preRetrieveAll || retrieveAll;
                 matchAttributes.Add(string.Format(
                     CultureInfo.InvariantCulture, "<Attribute Name=\"{0}\" />", attribute));
+                return this;
+            }
+
+            /// <summary>Sets a definition-level attribute, such as BypassSyncLogic.</summary>
+            public DataBlockBuilder DefinitionAttribute(string attribute, string value)
+            {
+                owner.Attribute(attribute, value);
                 return this;
             }
 

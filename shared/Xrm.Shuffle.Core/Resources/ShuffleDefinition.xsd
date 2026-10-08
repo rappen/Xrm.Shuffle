@@ -60,7 +60,7 @@
 
   <xs:element name="ShuffleDefinition">
     <xs:annotation>
-      <xs:documentation>The ShuffleDefinition defines Timeout and StopOnError to control general behavior of the Shuffle.</xs:documentation>
+      <xs:documentation>The ShuffleDefinition defines Timeout, StopOnError and which custom logic to bypass during import, to control general behavior of the Shuffle.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
@@ -68,6 +68,21 @@
       </xs:sequence>
       <xs:attribute name="Timeout" type="xs:int" use="optional" />
       <xs:attribute name="StopOnError" type="xs:boolean" use="optional" default="false" />
+      <xs:attribute name="BypassSyncLogic" type="xs:boolean" use="optional" default="false">
+        <xs:annotation>
+          <xs:documentation>Import without running synchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="BypassAsyncLogic" type="xs:boolean" use="optional" default="false">
+        <xs:annotation>
+          <xs:documentation>Import without running asynchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege; Dataverse only.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="BypassFlows" type="xs:boolean" use="optional" default="false">
+        <xs:annotation>
+          <xs:documentation>Import without triggering Power Automate flows. Dataverse only.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
     </xs:complexType>
   </xs:element>
 

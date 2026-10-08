@@ -4,6 +4,7 @@
     using global::Xrm.Utils.Core.Common.Extensions;
     using global::Xrm.Utils.Core.Common.Interfaces;
     using global::Xrm.Utils.Core.Common.Misc;
+    using Microsoft.Crm.Sdk.Messages;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Client;
     using Microsoft.Xrm.Sdk.Query;
@@ -341,6 +342,26 @@
         }
 
         /// <summary>
+        /// The container data blocks are imported with: the given one, or - when the definition
+        /// asks to bypass custom logic - one whose every write carries the bypass parameters.
+        /// </summary>
+        /// <exception cref="NotSupportedException">The server cannot bypass what the definition asks for.</exception>
+        private IExecutionContainer BypassLogicContainer(IExecutionContainer container)
+        {
+            var sync = ShuffleDefinition.BypassSyncLogic;
+            var async = ShuffleDefinition.BypassAsyncLogic;
+            var flows = ShuffleDefinition.BypassFlows;
+            if (!sync && !async && !flows)
+            {
+                return container;
+            }
+            var version = new Version(((RetrieveVersionResponse)container.Service.Execute(new RetrieveVersionRequest())).Version);
+            var parameters = BypassLogicService.ParametersFor(sync, async, flows, version);
+            container.Log($"Bypassing custom logic: {BypassLogicService.Describe(sync, async, flows)} ({string.Join(", ", parameters.Select(p => $"{p.Key}={p.Value}"))})");
+            return new BypassContainer(container, new BypassLogicService(container.Service, parameters));
+        }
+
+        /// <summary>
         /// Import entities to CRM from dictionary of blocks
         /// </summary>
         /// <param name="container"></param>
@@ -365,6 +386,7 @@
             {
                 guidmap = new Dictionary<Guid, Guid>();
                 stoponerror = ShuffleDefinition.StopOnError;
+                var datacontainer = BypassLogicContainer(container);
                 timeout = ShuffleDefinition.TimeoutSpecified ? ShuffleDefinition.Timeout : -1;
                 //double savedtimeout = -1;
                 //if (timeout > -1)
@@ -385,7 +407,7 @@
                         {
                             blocks.Add(name, new EntityCollection());
                         }
-                        var dataresult = ImportDataBlock(container, datablock, blocks[name]);
+                        var dataresult = ImportDataBlock(datacontainer, datablock, blocks[name]);
                         created += dataresult.Item1;
                         updated += dataresult.Item2;
                         skipped += dataresult.Item3;

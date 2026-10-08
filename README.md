@@ -64,6 +64,9 @@ All three tools are driven by a **Shuffle definition** that follows `ShuffleDefi
 |-----------|------|---------|-------------|
 | `Timeout` | int | 2 | Minutes to wait for an **asynchronous solution import** to finish once the import job has started. It does not limit anything else. |
 | `StopOnError` | boolean | `false` | Stop the run at the first record or solution that fails, instead of logging it and carrying on |
+| `BypassSyncLogic` | boolean | `false` | Import without running synchronous plugins and workflows. See [Bypassing custom logic](#bypassing-custom-logic) |
+| `BypassAsyncLogic` | boolean | `false` | Import without running asynchronous plugins and workflows (Dataverse only) |
+| `BypassFlows` | boolean | `false` | Import without triggering Power Automate flows (Dataverse only) |
 
 Contains a `<Blocks>` element holding any combination of `<SolutionBlock>` and `<DataBlock>`,
 processed in order.
@@ -255,12 +258,46 @@ creates each record and updates it if it already exists.
 
 ---
 
+## Bypassing custom logic
+
+A data load into a configured environment fires every plugin, workflow and flow registered on
+the tables it writes to - once per record. That makes loads slow, fills the async queue, and can
+change the data on its way in: auto-numbering, validation, flows that send mail. Three attributes
+on `<ShuffleDefinition>` switch that off for the whole import:
+
+```xml
+<ShuffleDefinition BypassSyncLogic="true" BypassAsyncLogic="true" BypassFlows="true">
+```
+
+| Attribute | Skips | Sent as |
+|-----------|-------|---------|
+| `BypassSyncLogic` | Synchronous plugins and real-time workflows | `BypassBusinessLogicExecution = CustomSync` |
+| `BypassAsyncLogic` | Asynchronous plugins and background workflows | `BypassBusinessLogicExecution = CustomAsync` |
+| `BypassFlows` | Power Automate flows triggered by Dataverse | `SuppressCallbackRegistrationExpanderJob = true` |
+
+- **Every write in every data block** carries the parameters: batched and single creates and
+  updates, upserts, deletes, state and owner changes (also the deferred pass) and N:N
+  associations. Solution blocks are not affected.
+- **The user needs the `prvBypassCustomBusinessLogic` privilege** for sync and async logic
+  (System Administrators have it). Without it, the first write fails with Dataverse's error.
+- Microsoft's own logic still runs; only custom logic is skipped.
+- **On-premises 9.0 and 9.1** only support bypassing sync logic, sent as the older
+  `BypassCustomPluginExecution`. A definition that also asks for async logic or flows stops
+  before writing anything there, rather than import with logic it said to skip. Older versions
+  cannot bypass at all.
+
+See Microsoft's [Bypass custom business logic](https://learn.microsoft.com/power-apps/developer/data-platform/bypass-custom-business-logic)
+and [Bypass Power Automate flows](https://learn.microsoft.com/power-apps/developer/data-platform/bypass-power-automate-flows).
+
+---
+
 ## What's new since 1.2023.5
 
 ### Import
 - **Opt-in batching** with `BatchSize`, using `CreateMultiple`/`UpdateMultiple`, `ExecuteMultipleRequest` or individual requests depending on what the environment supports
 - **`DeferStateAndOwner`** for batching records that carry state or owner
 - **Upsert path** for blocks matching on the primary key, with `UpsertMultiple`
+- **Bypass custom logic**: `BypassSyncLogic`, `BypassAsyncLogic` and `BypassFlows` on the definition skip plugins, workflows and flows during the import, with three matching checkboxes on the Builder's root node
 - The Builder has a **Batch size** field and a **Defer state and owner** checkbox on the Import node
 - **`PreRetrieveAll` reads the whole target table.** It stopped at 5000 records, so every source record whose match lay beyond that was created a second time
 - **`PreRetrieveAll` matching is a lookup** instead of a scan of the whole table for every record
