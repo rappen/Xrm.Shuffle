@@ -319,6 +319,7 @@ and [Bypass Power Automate flows](https://learn.microsoft.com/power-apps/develop
 - Log sections are nested correctly, also after a failed record or solution
 - Log files are named after the definition, operation, connection and time
 - The Runner no longer makes the import wait for its window to repaint, which cost about 15 ms per record
+- Every import and export ends with its total run time and counts, for example `Import finished in 1 min 58 s: 14970 created, 0 updated, 0 skipped, 0 deleted, 0 failed` - in the log, the Runner and the pipeline output
 
 ### Export
 - **Exports are complete.** Every export query stopped at 5000 records, so larger tables were cut off without a warning; all three - filter, FetchXML and intersect - now read every page

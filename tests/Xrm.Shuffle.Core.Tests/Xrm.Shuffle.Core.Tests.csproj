@@ -65,6 +65,7 @@
     <Compile Include="Layer1\BatchResponsePairingTests.cs" />
     <Compile Include="Layer1\BypassLogicServiceTests.cs" />
     <Compile Include="Layer1\RetrieveAllTests.cs" />
+    <Compile Include="Layer1\RunDurationTests.cs" />
     <Compile Include="Layer1\BulkMessageFallbackTests.cs" />
     <Compile Include="Layer1\BulkMessageRoutingTests.cs" />
     <Compile Include="Layer1\UpdateAndDeletePairingTests.cs" />

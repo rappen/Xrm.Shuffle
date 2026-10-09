@@ -195,6 +195,22 @@
             Assert.That(target.Rows("account").Single()["name"], Is.EqualTo(SourceAccount()["name"]));
         }
 
+        /// <summary>Both runs end with how long they took and what they did, in the log and to the listener.</summary>
+        [Test]
+        public void Export_and_import_end_with_their_run_time_and_counts()
+        {
+            var data = ExportToFileAndLoad(SerializationType.Simple);
+            Assert.That(Org.Logger.Dump(), Does.Match(@"Export finished in \d+(\.\d)? s: 2 records"));
+
+            var target = EmptyTarget();
+            var heard = new List<string>();
+            Shuffler.QuickImport(target.Container, Definition(), data, (sender, e) => heard.Add(e.Message));
+
+            const string import = @"Import finished in \d+(\.\d)? s: 2 created, 0 updated, 0 skipped, 0 deleted, 0 failed";
+            Assert.That(target.Logger.Dump(), Does.Match(import));
+            Assert.That(heard, Has.Some.Match(import), "the Runner and the pipeline tasks show what the listener hears");
+        }
+
         /// <summary>The data file lists columns alphabetically, so re-exports give stable diffs.</summary>
         [Test]
         public void Exported_columns_are_in_alphabetical_order()
