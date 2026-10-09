@@ -9,6 +9,7 @@
 		<projectUrl>https://jonasr.app/shuffle/</projectUrl>
 		<iconUrl>https://jonasr.app/wp-content/uploads/Shuffle-2B.png</iconUrl>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<readme>docs\README.md</readme>
 		<description>
 			The Shuffle Builder helps you to create schema definition files.
 
@@ -38,5 +39,6 @@ Full details: https://github.com/rappen/Xrm.Shuffle#whats-new-since-120235
 	</metadata>
 	<files>
 		<file src="bin\Release\Rappen.XTB.Shuffle.dll" target="lib\net48\Plugins" />
+		<file src="..\README.md" target="docs\" />
 	</files>
 </package>
