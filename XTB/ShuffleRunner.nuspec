@@ -32,6 +32,8 @@ Import
 - Floating point (Double) columns can be imported from every format, not only Full.
 - Records with date columns are now skipped as identical when nothing changed, and a Match on a date column finds the existing record instead of creating a duplicate.
 - Money and decimal values are compared by value, so the same amount with a different number of decimals is identical and matches.
+- Bypass custom logic: BypassSyncLogic, BypassAsyncLogic and BypassFlows on the definition import without running plugins, workflows and Power Automate flows.
+- Every import and export ends with its total run time and counts.
 - An N:N relationship from a table to itself imports; every record used to fail.
 
 Runner

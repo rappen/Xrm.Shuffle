@@ -4,6 +4,7 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
     using System.Collections.Generic;
     using System.Linq;
     using FakeXrmEasy;
+    using Microsoft.Crm.Sdk.Messages;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Messages;
     using Microsoft.Xrm.Sdk.Metadata;
@@ -138,6 +139,15 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
                 throwOnce[messageName] = queue;
             }
             queue.Enqueue(exception);
+            return this;
+        }
+
+        private string version = "9.2.0.0";
+
+        /// <summary>The version RetrieveVersionRequest answers with; Dataverse by default.</summary>
+        public RecordingOrganizationService WithVersion(string serverVersion)
+        {
+            version = serverVersion;
             return this;
         }
 
@@ -313,6 +323,13 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Helpers
             if (FetchXmlConversion.IsConversion(request))
             {
                 return FetchXmlConversion.Answer(request);
+            }
+            if (request is RetrieveVersionRequest)
+            {
+                requests.Add(request);
+                var answer = new RetrieveVersionResponse();
+                answer.Results["Version"] = version;
+                return answer;
             }
             if (request is RetrieveMetadataChangesRequest metadataRequest)
             {
