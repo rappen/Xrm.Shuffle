@@ -1,12 +1,16 @@
 name: CI Build
 
+# Pushes build only on master: a change on its way there is built by its pull request,
+# against the merge result, and building the branch push as well ran the same build twice
+# and used up a version number each time. Build any branch by hand with workflow_dispatch.
 on:
   push:
     branches:
-      - '**'
+      - master
   pull_request:
     branches:
       - master
+  workflow_dispatch:
 
 jobs:
   build:
