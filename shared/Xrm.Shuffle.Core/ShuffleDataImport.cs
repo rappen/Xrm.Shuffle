@@ -104,8 +104,31 @@
         private static string TargetAttributeValue(IExecutionContainer container, Entity entity, string attr)
         {
             var value = container.AttributeAsBaseType(entity, attr, "<null>", true);
-            return value is DateTime date ? ComparableDate(date) : value?.ToString() ?? "<null>";
+            switch (value)
+            {
+                case DateTime date:
+                    return ComparableDate(date);
+
+                case decimal number:
+                    return ComparableDecimal(number);
+
+                default:
+                    return value?.ToString() ?? "<null>";
+            }
         }
+
+        /// <summary>
+        /// A decimal or money amount as compared when matching: by value, not by how many
+        /// decimals it happens to carry.
+        /// </summary>
+        /// <remarks>
+        /// A decimal keeps its scale, so 4999.0000 and 4999.00 are equal but print differently. A
+        /// data file holds the source environment's scale and the target returns its own, which
+        /// for money follows that environment's precision settings. Dividing by 1 with 28
+        /// decimals drops the trailing zeros.
+        /// </remarks>
+        private static string ComparableDecimal(decimal number) =>
+            (number / 1.0000000000000000000000000000m).ToString(CultureInfo.InvariantCulture);
 
         /// <summary>
         /// A date as compared when matching: the same moment must give the same text whichever

@@ -123,6 +123,61 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Layer2
             }
         }
 
+        /// <summary>A source record with an amount as read from a data file.</summary>
+        private static Entity SourceWithAmount(Guid id, string name, string type, string fileText)
+        {
+            var entity = Source(id, name);
+            entity.SetAttribute(new TestExecutionContainer(null), type == "Money" ? "revenue" : "exchangerate", type, fileText);
+            return entity;
+        }
+
+        /// <summary>
+        /// A data file holds the source environment's scale (4999.0000); the target returns its
+        /// own, which for money follows that environment's precision (4999.00). Compared as text
+        /// they differed, so a record with an amount was never identical - and a Match on an
+        /// amount found nothing and created the record again.
+        /// </summary>
+        [TestCase("Money", "4999.0000", 4999.00)]
+        [TestCase("Money", "0.0000", 0)]
+        [TestCase("Money", "-12.5000", -12.5)]
+        [TestCase("Decimal", "1.2500000000", 1.25)]
+        public void An_amount_that_has_not_changed_is_identical_whatever_its_decimals(string type, string fileText, double stored)
+        {
+            var existing = Seeded("account", Id(101), "Alpha");
+            var value = Math.Round((decimal)stored, 2);
+            if (type == "Money")
+            {
+                existing["revenue"] = new Money(value);
+            }
+            else
+            {
+                existing["exchangerate"] = value;
+            }
+            Online().WithEntity(existing);
+
+            var outcome = NewShuffler().TestImportDataBlock(
+                MatchOnName(),
+                Collection(SourceWithAmount(Id(1), "Alpha", type, fileText)));
+
+            Assert.That(outcome.Skipped, Is.EqualTo(1), DumpAll());
+            Assert.That(outcome.Updated, Is.EqualTo(0), DumpAll());
+        }
+
+        [Test]
+        public void An_amount_that_changed_is_updated()
+        {
+            var existing = Seeded("account", Id(101), "Alpha");
+            existing["revenue"] = new Money(4999.00m);
+            Online().WithEntity(existing);
+
+            var outcome = NewShuffler().TestImportDataBlock(
+                MatchOnName(),
+                Collection(SourceWithAmount(Id(1), "Alpha", "Money", "5000.0000")));
+
+            Assert.That(outcome.Updated, Is.EqualTo(1), DumpAll());
+            Assert.That(outcome.Skipped, Is.EqualTo(0), DumpAll());
+        }
+
         /// <summary>The other side of the fix: a date that really moved is still written.</summary>
         [Test]
         public void A_date_that_changed_by_an_hour_is_updated()

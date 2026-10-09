@@ -90,6 +90,32 @@
             }
         }
 
+        /// <summary>
+        /// A Match on an amount compares values, not text: 4999.0000 from the data file meets
+        /// 4999.00 in the target instead of creating the record a second time.
+        /// </summary>
+        [Test]
+        public void A_match_on_an_amount_finds_the_existing_record_whatever_its_decimals()
+        {
+            var existing = Seeded("account", Id(101), "Alpha");
+            existing["revenue"] = new Money(4999.00m);
+            Online().WithEntity(existing);
+            var source = Record("account", Id(1), "Alpha");
+            source.SetAttribute(new TestExecutionContainer(null), "revenue", "Money", "4999.0000");
+
+            var outcome = NewShuffler().TestImportDataBlock(
+                DefinitionXml.DataBlock("Accounts", "account")
+                    .BatchSize(10)
+                    .ImportAttribute("UpdateIdentical", "true")
+                    .MatchOn("revenue")
+                    .DeserializeBlock(),
+                Sources(source));
+
+            Assert.That(outcome.Created, Is.EqualTo(0), DumpAll());
+            Assert.That(outcome.Updated, Is.EqualTo(1), DumpAll());
+            Assert.That(Org.Rows("account").Count, Is.EqualTo(1), "no duplicate should have been created");
+        }
+
         [Test]
         public void Several_target_records_with_the_same_match_values_fail_the_match()
         {

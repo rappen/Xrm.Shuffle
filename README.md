@@ -271,6 +271,7 @@ creates each record and updates it if it already exists.
 - Multi-select choice columns (`OptionSetValueCollection`) export and import correctly
 - Floating point (`Double`) columns can be imported from every format, not only Full
 - Records with date columns are skipped as `(Identical)` when nothing changed. A date read from a file and the same date read from the target used to compare as different, so these records were always updated, and a `Match` on a date column created a duplicate
+- Money and decimal values are compared by value, so `4999.0000` from a data file and `4999.00` in an environment with another money precision are the same. Records with amounts were always updated, and a `Match` on an amount created the record again
 
 ### Solutions
 - A zip without `solution.xml` fails with a clear `FileNotFoundException`
