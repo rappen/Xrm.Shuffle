@@ -4,6 +4,7 @@
     using global::Xrm.Utils.Core.Common.Extensions;
     using global::Xrm.Utils.Core.Common.Interfaces;
     using global::Xrm.Utils.Core.Common.Misc;
+    using Microsoft.Crm.Sdk.Messages;
     using Microsoft.Xrm.Sdk;
     using Microsoft.Xrm.Sdk.Client;
     using Microsoft.Xrm.Sdk.Query;
@@ -139,6 +140,7 @@
         public static XmlDocument QuickExport(IExecutionContainer container, XmlDocument Definition, SerializationType Type, char Delimeter, EventHandler<ShuffleEventArgs> ShuffleEventHandler, string defpath, bool clearRemainingShuffleVars)
         {
             container.StartSection("QuickExport");
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             var shuffle = new Shuffler(container);
             if (ShuffleEventHandler != null)
             {
@@ -149,6 +151,7 @@
             shuffle.definitionPath = defpath;
             var blocks = shuffle.ExportFromCRM(container);
             var result = shuffle.Serialize(container, blocks, Type, Delimeter);
+            shuffle.SendLine(container, $"Export finished in {Duration(stopwatch.Elapsed)}: {blocks.Values.Sum(b => b.Entities.Count)} records");
             container.EndSection();
             return result;
         }
@@ -183,6 +186,7 @@
         public static Tuple<int, int, int, int, int, EntityReferenceCollection> QuickImport(IExecutionContainer container, XmlDocument Definition, XmlDocument Data, EventHandler<ShuffleEventArgs> ShuffleEventHandler, string defpath, bool clearRemainingShuffleVars)
         {
             container.StartSection("QuickImport");
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             var shuffle = new Shuffler(container);
             if (ShuffleEventHandler != null)
             {
@@ -193,8 +197,23 @@
             shuffle.definitionPath = defpath;
             var blocks = shuffle.Deserialize(container, Data);
             var result = shuffle.ImportToCRM(container, blocks);
+            shuffle.SendLine(container, $"Import finished in {Duration(stopwatch.Elapsed)}: {result.Item1} created, {result.Item2} updated, {result.Item3} skipped, {result.Item4} deleted, {result.Item5} failed");
             container.EndSection();
             return result;
+        }
+
+        /// <summary>A run time for people to read: "4.2 s", "1 min 58 s", "1 h 54 min".</summary>
+        public static string Duration(TimeSpan elapsed)
+        {
+            if (elapsed.TotalHours >= 1)
+            {
+                return $"{(int)elapsed.TotalHours} h {elapsed.Minutes} min";
+            }
+            if (elapsed.TotalMinutes >= 1)
+            {
+                return $"{elapsed.Minutes} min {elapsed.Seconds} s";
+            }
+            return elapsed.TotalSeconds.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " s";
         }
 
         /// <summary>
@@ -341,6 +360,34 @@
         }
 
         /// <summary>
+        /// The container data blocks are imported with: the given one, or - when the definition
+        /// asks to bypass custom logic - one whose every write carries the bypass parameters.
+        /// What the server cannot bypass is reported as a warning and runs as usual.
+        /// </summary>
+        private IExecutionContainer BypassLogicContainer(IExecutionContainer container)
+        {
+            var sync = ShuffleDefinition.BypassSyncLogic;
+            var async = ShuffleDefinition.BypassAsyncLogic;
+            var flows = ShuffleDefinition.BypassFlows;
+            if (!sync && !async && !flows)
+            {
+                return container;
+            }
+            var version = new Version(((RetrieveVersionResponse)container.Service.Execute(new RetrieveVersionRequest())).Version);
+            var parameters = BypassLogicService.ParametersFor(sync, async, flows, version, out var warnings);
+            foreach (var warning in warnings)
+            {
+                SendLine(container, "WARNING: " + warning);
+            }
+            if (parameters.Count == 0)
+            {
+                return container;
+            }
+            SendLine(container, $"Bypassing custom logic: {BypassLogicService.Describe(parameters)} ({string.Join(", ", parameters.Select(p => $"{p.Key}={p.Value}"))})");
+            return new BypassContainer(container, new BypassLogicService(container.Service, parameters));
+        }
+
+        /// <summary>
         /// Import entities to CRM from dictionary of blocks
         /// </summary>
         /// <param name="container"></param>
@@ -365,6 +412,7 @@
             {
                 guidmap = new Dictionary<Guid, Guid>();
                 stoponerror = ShuffleDefinition.StopOnError;
+                var datacontainer = BypassLogicContainer(container);
                 timeout = ShuffleDefinition.TimeoutSpecified ? ShuffleDefinition.Timeout : -1;
                 //double savedtimeout = -1;
                 //if (timeout > -1)
@@ -385,7 +433,7 @@
                         {
                             blocks.Add(name, new EntityCollection());
                         }
-                        var dataresult = ImportDataBlock(container, datablock, blocks[name]);
+                        var dataresult = ImportDataBlock(datacontainer, datablock, blocks[name]);
                         created += dataresult.Item1;
                         updated += dataresult.Item2;
                         skipped += dataresult.Item3;

@@ -23,7 +23,8 @@ Changes since 1.2023.5:
 
 - New Batch size field on the Import node (default 1, no batching; max 1000).
 - New Defer state and owner checkbox on the Import node, with a tooltip explaining when it helps.
-- Definitions follow the updated schema: BatchSize and DeferStateAndOwner on Import.
+- New Bypass sync logic, Bypass async logic and Bypass flows checkboxes on the ShuffleDefinition node.
+- Definitions follow the updated schema: BatchSize and DeferStateAndOwner on Import; BypassSyncLogic, BypassAsyncLogic and BypassFlows on ShuffleDefinition.
 - .NET Framework 4.8; ILMerge removed; DotNetZip replaced with System.IO.Compression.
 
 The import engine changes are listed in the Shuffle Runner release notes.
