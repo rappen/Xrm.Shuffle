@@ -37,18 +37,21 @@
         }
 
         /// <summary>
-        /// The parameters that bypass what was asked for, on a server of this version.
+        /// The parameters that bypass as much of what was asked for as a server of this version
+        /// can, and a warning for each part it cannot.
         /// </summary>
-        /// <exception cref="NotSupportedException">The server cannot bypass something that was asked for.</exception>
         /// <remarks>
         /// Dataverse (9.2) takes BypassBusinessLogicExecution and
         /// SuppressCallbackRegistrationExpanderJob. Older on-premises servers only know the
-        /// legacy BypassCustomPluginExecution, which covers sync logic alone. Running logic the
-        /// definition said to skip would be worse than not importing, so anything else fails.
+        /// legacy BypassCustomPluginExecution, which covers sync logic alone, and servers before
+        /// 9.0 cannot bypass anything. A definition is often shared between online and
+        /// on-premises environments, so what a server cannot bypass runs as usual, with a
+        /// warning, rather than stopping the import.
         /// </remarks>
-        public static Dictionary<string, object> ParametersFor(bool sync, bool async, bool flows, Version server)
+        public static Dictionary<string, object> ParametersFor(bool sync, bool async, bool flows, Version server, out List<string> warnings)
         {
             var result = new Dictionary<string, object>(StringComparer.Ordinal);
+            warnings = new List<string>();
             if (!sync && !async && !flows)
             {
                 return result;
@@ -66,19 +69,42 @@
                 }
                 return result;
             }
-            if (server >= new Version(9, 0) && !async && !flows)
+            var notBypassed = new List<string>();
+            if (sync)
             {
-                result["BypassCustomPluginExecution"] = true;
-                return result;
+                if (server >= new Version(9, 0))
+                {
+                    result["BypassCustomPluginExecution"] = true;
+                }
+                else
+                {
+                    notBypassed.Add("sync plugins and workflows");
+                }
             }
-            throw new NotSupportedException(server >= new Version(9, 0)
-                ? $"This server ({server}) can only bypass sync plugins and workflows. Turn off BypassAsyncLogic and BypassFlows in the definition, or import with them running."
-                : $"This server ({server}) cannot bypass custom logic. Turn off BypassSyncLogic, BypassAsyncLogic and BypassFlows in the definition.");
+            if (async)
+            {
+                notBypassed.Add("async plugins and workflows");
+            }
+            if (flows)
+            {
+                notBypassed.Add("Power Automate flows");
+            }
+            if (notBypassed.Count > 0)
+            {
+                warnings.Add($"This server ({server}) cannot bypass {string.Join(" or ", notBypassed)}. They run as usual during this import.");
+            }
+            return result;
         }
 
-        /// <summary>A short description for the log, e.g. "sync, async, flows".</summary>
-        public static string Describe(bool sync, bool async, bool flows) =>
-            string.Join(", ", new[] { sync ? "sync" : null, async ? "async" : null, flows ? "flows" : null }.Where(s => s != null));
+        /// <summary>What the parameters bypass, for the log, e.g. "sync, async, flows".</summary>
+        public static string Describe(IDictionary<string, object> parameters)
+        {
+            var logic = parameters.TryGetValue("BypassBusinessLogicExecution", out var value) ? value as string ?? "" : "";
+            var sync = logic.Contains("CustomSync") || parameters.ContainsKey("BypassCustomPluginExecution");
+            var async = logic.Contains("CustomAsync");
+            var flows = parameters.ContainsKey("SuppressCallbackRegistrationExpanderJob");
+            return string.Join(", ", new[] { sync ? "sync" : null, async ? "async" : null, flows ? "flows" : null }.Where(s => s != null));
+        }
 
         public OrganizationResponse Execute(OrganizationRequest request)
         {

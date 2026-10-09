@@ -64,8 +64,11 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Layer1
             }
         }
 
+        private static Dictionary<string, object> Parameters(bool sync, bool async, bool flows, Version server) =>
+            BypassLogicService.ParametersFor(sync, async, flows, server, out _);
+
         private static BypassLogicService Bypassing(Recorder inner, bool sync = true, bool async = false, bool flows = false) =>
-            new BypassLogicService(inner, BypassLogicService.ParametersFor(sync, async, flows, Dataverse));
+            new BypassLogicService(inner, Parameters(sync, async, flows, Dataverse));
 
         private static object Parameter(OrganizationRequest request, string name) =>
             request.Parameters.TryGetValue(name, out var value) ? value : null;
@@ -145,7 +148,9 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Layer1
         [TestCase(true, true, true, "CustomSync,CustomAsync", true)]
         public void Dataverse_gets_the_current_parameters(bool sync, bool async, bool flows, string logic, object suppressFlows)
         {
-            var parameters = BypassLogicService.ParametersFor(sync, async, flows, Dataverse);
+            var parameters = BypassLogicService.ParametersFor(sync, async, flows, Dataverse, out var warnings);
+
+            Assert.That(warnings, Is.Empty);
 
             Assert.That(parameters.TryGetValue("BypassBusinessLogicExecution", out var l) ? l : null, Is.EqualTo(logic));
             Assert.That(parameters.TryGetValue("SuppressCallbackRegistrationExpanderJob", out var f) ? f : null, Is.EqualTo(suppressFlows));
@@ -155,32 +160,49 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Layer1
         [Test]
         public void Nothing_asked_gives_no_parameters_on_any_server()
         {
-            Assert.That(BypassLogicService.ParametersFor(false, false, false, new Version(8, 2)), Is.Empty);
+            Assert.That(BypassLogicService.ParametersFor(false, false, false, new Version(8, 2), out var warnings), Is.Empty);
+            Assert.That(warnings, Is.Empty);
         }
 
         /// <summary>On-premises 9.0 and 9.1 only know the legacy parameter, which covers sync logic.</summary>
         [Test]
         public void An_older_server_bypasses_sync_logic_with_the_legacy_parameter()
         {
-            var parameters = BypassLogicService.ParametersFor(true, false, false, new Version(9, 1, 0, 0));
+            var parameters = BypassLogicService.ParametersFor(true, false, false, new Version(9, 1, 0, 0), out var warnings);
 
             Assert.That(parameters, Is.EquivalentTo(new Dictionary<string, object> { ["BypassCustomPluginExecution"] = true }));
+            Assert.That(warnings, Is.Empty);
         }
 
-        [TestCase(false, true, false)]
-        [TestCase(false, false, true)]
-        [TestCase(true, true, false)]
-        public void An_older_server_refuses_what_it_cannot_bypass(bool sync, bool async, bool flows)
+        /// <summary>
+        /// A definition is often shared between online and on-premises: what the server cannot
+        /// bypass runs as usual, with a warning, and the rest is still bypassed.
+        /// </summary>
+        [Test]
+        public void An_older_server_bypasses_what_it_can_and_warns_about_the_rest()
         {
-            var ex = Assert.Throws<NotSupportedException>(() => BypassLogicService.ParametersFor(sync, async, flows, new Version(9, 1, 0, 0)));
-            Assert.That(ex.Message, Does.Contain("only bypass sync"));
+            var parameters = BypassLogicService.ParametersFor(true, true, true, new Version(9, 1, 0, 0), out var warnings);
+
+            Assert.That(parameters, Is.EquivalentTo(new Dictionary<string, object> { ["BypassCustomPluginExecution"] = true }));
+            Assert.That(warnings, Has.Count.EqualTo(1));
+            Assert.That(warnings[0], Does.Contain("9.1.0.0").And.Contain("cannot bypass async plugins and workflows or Power Automate flows").And.Contain("run as usual"));
         }
 
         [Test]
-        public void A_server_before_9_0_refuses_any_bypass()
+        public void A_server_before_9_0_bypasses_nothing_and_warns()
         {
-            var ex = Assert.Throws<NotSupportedException>(() => BypassLogicService.ParametersFor(true, false, false, new Version(8, 2, 0, 0)));
-            Assert.That(ex.Message, Does.Contain("cannot bypass"));
+            var parameters = BypassLogicService.ParametersFor(true, false, false, new Version(8, 2, 0, 0), out var warnings);
+
+            Assert.That(parameters, Is.Empty);
+            Assert.That(warnings.Single(), Does.Contain("cannot bypass sync plugins and workflows"));
+        }
+
+        [Test]
+        public void The_log_describes_what_is_actually_bypassed()
+        {
+            Assert.That(BypassLogicService.Describe(Parameters(true, true, true, Dataverse)), Is.EqualTo("sync, async, flows"));
+            Assert.That(BypassLogicService.Describe(Parameters(true, true, true, new Version(9, 1))), Is.EqualTo("sync"));
+            Assert.That(BypassLogicService.Describe(Parameters(false, false, true, Dataverse)), Is.EqualTo("flows"));
         }
     }
 }

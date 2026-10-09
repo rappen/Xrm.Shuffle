@@ -362,8 +362,8 @@
         /// <summary>
         /// The container data blocks are imported with: the given one, or - when the definition
         /// asks to bypass custom logic - one whose every write carries the bypass parameters.
+        /// What the server cannot bypass is reported as a warning and runs as usual.
         /// </summary>
-        /// <exception cref="NotSupportedException">The server cannot bypass what the definition asks for.</exception>
         private IExecutionContainer BypassLogicContainer(IExecutionContainer container)
         {
             var sync = ShuffleDefinition.BypassSyncLogic;
@@ -374,8 +374,16 @@
                 return container;
             }
             var version = new Version(((RetrieveVersionResponse)container.Service.Execute(new RetrieveVersionRequest())).Version);
-            var parameters = BypassLogicService.ParametersFor(sync, async, flows, version);
-            container.Log($"Bypassing custom logic: {BypassLogicService.Describe(sync, async, flows)} ({string.Join(", ", parameters.Select(p => $"{p.Key}={p.Value}"))})");
+            var parameters = BypassLogicService.ParametersFor(sync, async, flows, version, out var warnings);
+            foreach (var warning in warnings)
+            {
+                SendLine(container, "WARNING: " + warning);
+            }
+            if (parameters.Count == 0)
+            {
+                return container;
+            }
+            SendLine(container, $"Bypassing custom logic: {BypassLogicService.Describe(parameters)} ({string.Join(", ", parameters.Select(p => $"{p.Key}={p.Value}"))})");
             return new BypassContainer(container, new BypassLogicService(container.Service, parameters));
         }
 

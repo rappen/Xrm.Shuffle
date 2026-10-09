@@ -282,9 +282,10 @@ on `<ShuffleDefinition>` switch that off for the whole import:
   (System Administrators have it). Without it, the first write fails with Dataverse's error.
 - Microsoft's own logic still runs; only custom logic is skipped.
 - **On-premises 9.0 and 9.1** only support bypassing sync logic, sent as the older
-  `BypassCustomPluginExecution`. A definition that also asks for async logic or flows stops
-  before writing anything there, rather than import with logic it said to skip. Older versions
-  cannot bypass at all.
+  `BypassCustomPluginExecution`; older versions cannot bypass at all. What a server cannot
+  bypass runs as usual: the import logs a warning and carries on, for example
+  `WARNING: This server (9.1.0.0) cannot bypass async plugins and workflows or Power Automate flows. They run as usual during this import.`
+  One definition therefore works for online and on-premises alike. The Builder's tooltips say the same.
 
 See Microsoft's [Bypass custom business logic](https://learn.microsoft.com/power-apps/developer/data-platform/bypass-custom-business-logic)
 and [Bypass Power Automate flows](https://learn.microsoft.com/power-apps/developer/data-platform/bypass-power-automate-flows).

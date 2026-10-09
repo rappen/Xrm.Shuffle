@@ -121,18 +121,39 @@ namespace Cinteros.Crm.Utils.Shuffle.Tests.Layer3
             Assert.That(WritesSent().Select(w => Parameter(w, "BypassCustomPluginExecution")), Is.All.EqualTo(true), DumpAll());
         }
 
-        /// <summary>Running logic the definition said to skip would be worse than not importing.</summary>
+        /// <summary>
+        /// The same definition on an on-premises server: sync logic is bypassed with the legacy
+        /// parameter, the rest runs as usual, and the run says so - but it is not stopped.
+        /// </summary>
         [Test]
-        public void An_on_premises_server_that_cannot_bypass_async_logic_stops_before_any_write()
+        public void An_on_premises_server_warns_about_what_it_cannot_bypass_and_imports()
         {
-            OnPrem().WithMetadata("account").WithMetadata("contact");
+            OnPrem().WithMetadata("account").WithMetadata("contact").WithEntity(Seeded("contact", Id(103), "Pat"));
             Service.WithVersion("9.1.0.0");
+            var heard = new List<string>();
 
-            var ex = Assert.Throws<NotSupportedException>(() =>
-                Shuffler.QuickImport(Org.Container, Definition("BypassSyncLogic", "BypassAsyncLogic").Build(), Data(), null));
+            var result = Shuffler.QuickImport(Org.Container, Definition("BypassSyncLogic", "BypassAsyncLogic", "BypassFlows").Build(), Data(), (sender, e) => heard.Add(e.Message));
 
-            Assert.That(ex.Message, Does.Contain("only bypass sync"));
-            Assert.That(WritesSent(), Is.Empty, DumpAll());
+            Assert.That(result.Item5, Is.EqualTo(0), DumpAll());
+            Assert.That(result.Item1, Is.GreaterThan(0), DumpAll());
+            Assert.That(WritesSent().Select(w => Parameter(w, "BypassCustomPluginExecution")), Is.All.EqualTo(true), DumpAll());
+            Assert.That(WritesSent().Select(w => Parameter(w, "BypassBusinessLogicExecution")), Is.All.Null, DumpAll());
+            Assert.That(heard, Has.Some.Contains("WARNING: This server (9.1.0.0) cannot bypass async plugins and workflows or Power Automate flows"));
+            Assert.That(Org.Logger.Logged("Bypassing custom logic: sync (BypassCustomPluginExecution=True)"), DumpAll());
+        }
+
+        /// <summary>A server that can bypass nothing imports exactly as without the attributes.</summary>
+        [Test]
+        public void A_server_before_9_0_imports_without_bypass_and_warns()
+        {
+            OnPrem().WithMetadata("account").WithMetadata("contact").WithEntity(Seeded("contact", Id(103), "Pat"));
+            Service.WithVersion("8.2.0.0");
+
+            var result = Shuffler.QuickImport(Org.Container, Definition("BypassSyncLogic").Build(), Data(), null);
+
+            Assert.That(result.Item5, Is.EqualTo(0), DumpAll());
+            Assert.That(WritesSent().Select(w => w.Parameters.Keys.Count(k => k.StartsWith("Bypass") || k.StartsWith("Suppress"))), Is.All.EqualTo(0));
+            Assert.That(Org.Logger.Logged("WARNING: This server (8.2.0.0) cannot bypass sync plugins and workflows"), DumpAll());
         }
 
         [Test]

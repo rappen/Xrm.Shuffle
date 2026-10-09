@@ -86,7 +86,7 @@
             this.chkBypassSyncLogic.Size = new System.Drawing.Size(15, 14);
             this.chkBypassSyncLogic.TabIndex = 4;
             this.chkBypassSyncLogic.Tag = "BypassSyncLogic|false|false";
-            this.tooltips.SetToolTip(this.chkBypassSyncLogic, "Import without running synchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege.");
+            this.tooltips.SetToolTip(this.chkBypassSyncLogic, "Import without running synchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege. On-premises 9.0 and 9.1 use the older BypassCustomPluginExecution; an older server cannot bypass it, so the import logs a warning and the logic runs.");
             this.chkBypassSyncLogic.UseVisualStyleBackColor = true;
             // 
             // lblBypassSyncLogic
@@ -96,7 +96,7 @@
             this.lblBypassSyncLogic.Name = "lblBypassSyncLogic";
             this.lblBypassSyncLogic.TabIndex = 5;
             this.lblBypassSyncLogic.Text = "Bypass sync logic";
-            this.tooltips.SetToolTip(this.lblBypassSyncLogic, "Import without running synchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege.");
+            this.tooltips.SetToolTip(this.lblBypassSyncLogic, "Import without running synchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege. On-premises 9.0 and 9.1 use the older BypassCustomPluginExecution; an older server cannot bypass it, so the import logs a warning and the logic runs.");
             // 
             // chkBypassAsyncLogic
             // 
@@ -106,7 +106,7 @@
             this.chkBypassAsyncLogic.Size = new System.Drawing.Size(15, 14);
             this.chkBypassAsyncLogic.TabIndex = 6;
             this.chkBypassAsyncLogic.Tag = "BypassAsyncLogic|false|false";
-            this.tooltips.SetToolTip(this.chkBypassAsyncLogic, "Import without running asynchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege. Dataverse only.");
+            this.tooltips.SetToolTip(this.chkBypassAsyncLogic, "Import without running asynchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege. Dataverse only: on an on-premises server the import logs a warning and the logic runs.");
             this.chkBypassAsyncLogic.UseVisualStyleBackColor = true;
             // 
             // lblBypassAsyncLogic
@@ -116,7 +116,7 @@
             this.lblBypassAsyncLogic.Name = "lblBypassAsyncLogic";
             this.lblBypassAsyncLogic.TabIndex = 7;
             this.lblBypassAsyncLogic.Text = "Bypass async logic";
-            this.tooltips.SetToolTip(this.lblBypassAsyncLogic, "Import without running asynchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege. Dataverse only.");
+            this.tooltips.SetToolTip(this.lblBypassAsyncLogic, "Import without running asynchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege. Dataverse only: on an on-premises server the import logs a warning and the logic runs.");
             // 
             // chkBypassFlows
             // 
@@ -126,7 +126,7 @@
             this.chkBypassFlows.Size = new System.Drawing.Size(15, 14);
             this.chkBypassFlows.TabIndex = 8;
             this.chkBypassFlows.Tag = "BypassFlows|false|false";
-            this.tooltips.SetToolTip(this.chkBypassFlows, "Import without triggering Power Automate flows. Dataverse only.");
+            this.tooltips.SetToolTip(this.chkBypassFlows, "Import without triggering Power Automate flows. Dataverse only: on an on-premises server the import logs a warning and carries on.");
             this.chkBypassFlows.UseVisualStyleBackColor = true;
             // 
             // lblBypassFlows
@@ -136,7 +136,7 @@
             this.lblBypassFlows.Name = "lblBypassFlows";
             this.lblBypassFlows.TabIndex = 9;
             this.lblBypassFlows.Text = "Bypass flows";
-            this.tooltips.SetToolTip(this.lblBypassFlows, "Import without triggering Power Automate flows. Dataverse only.");
+            this.tooltips.SetToolTip(this.lblBypassFlows, "Import without triggering Power Automate flows. Dataverse only: on an on-premises server the import logs a warning and carries on.");
             // 
             // ShuffleDefinitionControl
             // 

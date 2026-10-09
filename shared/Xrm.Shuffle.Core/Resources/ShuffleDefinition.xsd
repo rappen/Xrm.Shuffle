@@ -70,17 +70,17 @@
       <xs:attribute name="StopOnError" type="xs:boolean" use="optional" default="false" />
       <xs:attribute name="BypassSyncLogic" type="xs:boolean" use="optional" default="false">
         <xs:annotation>
-          <xs:documentation>Import without running synchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege.</xs:documentation>
+          <xs:documentation>Import without running synchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege. On-premises 9.0 and 9.1 use the older BypassCustomPluginExecution; an older server cannot bypass it, so the import logs a warning and the logic runs.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="BypassAsyncLogic" type="xs:boolean" use="optional" default="false">
         <xs:annotation>
-          <xs:documentation>Import without running asynchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege; Dataverse only.</xs:documentation>
+          <xs:documentation>Import without running asynchronous plugins and workflows. Needs the prvBypassCustomBusinessLogic privilege. Dataverse only: on an on-premises server the import logs a warning and the logic runs.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="BypassFlows" type="xs:boolean" use="optional" default="false">
         <xs:annotation>
-          <xs:documentation>Import without triggering Power Automate flows. Dataverse only.</xs:documentation>
+          <xs:documentation>Import without triggering Power Automate flows. Dataverse only: on an on-premises server the import logs a warning and carries on.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>
