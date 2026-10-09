@@ -809,10 +809,25 @@
                 {
                     id = guidmap[id];
                 }
-                var logicname = x.Key.EndsWith("id") ? x.Key.Substring(0, x.Key.Length - 2) : x.Key;
-                return new EntityReference(logicname, id);
+                return new EntityReference(TableOfIntersectColumn(x.Key), id);
             }
             return null;
+        }
+
+        /// <summary>
+        /// The table an intersect column points at: &lt;table&gt;id, or &lt;table&gt;idone and
+        /// &lt;table&gt;idtwo for an N:N relationship from a table to itself.
+        /// </summary>
+        private static string TableOfIntersectColumn(string column)
+        {
+            foreach (var suffix in new[] { "idone", "idtwo", "id" })
+            {
+                if (column.Length > suffix.Length && column.EndsWith(suffix, StringComparison.Ordinal))
+                {
+                    return column.Substring(0, column.Length - suffix.Length);
+                }
+            }
+            return column;
         }
 
         /// <summary>
