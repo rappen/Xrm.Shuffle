@@ -309,6 +309,7 @@ and [Bypass Power Automate flows](https://learn.microsoft.com/power-apps/develop
 - Multi-select choice columns (`OptionSetValueCollection`) export and import correctly
 - Floating point (`Double`) columns can be imported from every format, not only Full
 - Records with date columns are skipped as `(Identical)` when nothing changed. A date read from a file and the same date read from the target used to compare as different, so these records were always updated, and a `Match` on a date column created a duplicate
+- An N:N relationship from a table to itself (intersect columns `<table>idone` and `<table>idtwo`) imports. Every record used to fail, because the table name was taken as `<table>idone`
 
 ### Solutions
 - A zip without `solution.xml` fails with a clear `FileNotFoundException`

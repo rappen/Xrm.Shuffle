@@ -74,6 +74,7 @@
     <Compile Include="Layer2\BatchabilityTests.cs" />
     <Compile Include="Layer2\CapabilityDetectionTests.cs" />
     <Compile Include="Layer2\ExportAttributeSelectionTests.cs" />
+    <Compile Include="Layer2\IntersectImportTests.cs" />
     <Compile Include="Layer2\MatchResolutionTests.cs" />
     <Compile Include="Layer2\PreRetrievedMatchingTests.cs" />
     <Compile Include="Layer2\SkipIdenticalTests.cs" />

@@ -33,6 +33,7 @@ Import
 - Records with date columns are now skipped as identical when nothing changed, and a Match on a date column finds the existing record instead of creating a duplicate.
 - Bypass custom logic: BypassSyncLogic, BypassAsyncLogic and BypassFlows on the definition import without running plugins, workflows and Power Automate flows.
 - Every import and export ends with its total run time and counts.
+- An N:N relationship from a table to itself imports; every record used to fail.
 
 Logs
 - Values instead of SDK type names, no more "[START of ToString]" noise, and correctly nested sections, also after an error.
