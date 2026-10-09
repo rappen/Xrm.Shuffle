@@ -7,6 +7,14 @@ on:
         description: 'CI run ID whose nupkg artifact to publish (find it in the Actions tab URL)'
         required: true
 
+# The repository gives workflow tokens read access only. Creating the tag and the GitHub
+# release needs write access to contents, and downloading the packages from the CI run
+# needs actions: read - listing permissions here sets every other scope to none. The
+# NuGet push uses NUGET_API_KEY instead.
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   release:
     runs-on: windows-latest
