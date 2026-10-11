@@ -70,6 +70,8 @@ jobs:
           # Stop before NuGet when this build has been released already
           gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/v$version" --silent 2>$null
           if ($LASTEXITCODE -eq 0) { throw "Tag v$version already exists" }
+          # "Not found" is the expected answer; don't let gh's exit code end the step as failed
+          $global:LASTEXITCODE = 0
 
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "Releasing version: $version  ($($pkg.Name))"
