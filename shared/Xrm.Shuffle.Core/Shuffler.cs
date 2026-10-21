@@ -6,9 +6,7 @@
     using global::Xrm.Utils.Core.Common.Misc;
     using Microsoft.Crm.Sdk.Messages;
     using Microsoft.Xrm.Sdk;
-    using Microsoft.Xrm.Sdk.Client;
     using Microsoft.Xrm.Sdk.Query;
-    using Microsoft.Xrm.Tooling.Connector;
     using System;
     using System.Collections.Generic;
     using System.IO;
@@ -312,11 +310,6 @@
             {
                 stoponerror = ShuffleDefinition.StopOnError;
                 timeout = ShuffleDefinition.TimeoutSpecified ? ShuffleDefinition.Timeout : -1;
-                //double savedtimeout = -1;
-                //if (timeout > -1)
-                //{
-                //    savedtimeout = SetTimeout();
-                //}
 
                 var totalBlocks = ShuffleDefinition.Blocks.Items.Length;
                 var currentBlock = 0;
@@ -350,10 +343,6 @@
                     }
                 }
                 SendStatus(0, 0, 0, 0);
-                //if (savedtimeout > -1)
-                //{
-                //    ResetTimeout(container, savedtimeout);
-                //}
             }
             container.EndSection();
             return blocks;
@@ -414,11 +403,6 @@
                 stoponerror = ShuffleDefinition.StopOnError;
                 var datacontainer = BypassLogicContainer(container);
                 timeout = ShuffleDefinition.TimeoutSpecified ? ShuffleDefinition.Timeout : -1;
-                //double savedtimeout = -1;
-                //if (timeout > -1)
-                //{
-                //    savedtimeout = SetTimeout();
-                //}
 
                 var totalBlocks = ShuffleDefinition.Blocks.Items.Length;
                 var currentBlock = 0;
@@ -454,10 +438,6 @@
                     }
                 }
                 SendStatus(0, 0, 0, 0);
-                //if (savedtimeout > -1)
-                //{
-                //    ResetTimeout(container, savedtimeout);
-                //}
             }
             container.EndSection();
             return new Tuple<int, int, int, int, int, EntityReferenceCollection>(created, updated, skipped, deleted, failed, references);
@@ -552,19 +532,6 @@
             return cSolutions;
         }
 
-        private void ResetTimeout(IExecutionContainer container, double savedtimeout)
-        {
-            if (container.Service is OrganizationServiceProxy orgsvcpxy)
-            {
-                orgsvcpxy.Timeout = new TimeSpan(0, (int)savedtimeout, 0);
-            }
-            if (container.Service is CrmServiceClient svcclient)
-            {
-                //svcclient.
-                // svcclient.OrganizationServiceProxy.Timeout = new TimeSpan(0, (int)savedtimeout, 0);
-            }
-        }
-
         private void SendLine(IExecutionContainer container)
         {
             SendText(container, "\n", false);
@@ -609,23 +576,6 @@
             }
             OnRaiseShuffleEvent(new ShuffleEventArgs(msg, totalBlocks, currentBlock, blockRecords, currentRecord, replacelast));
         }
-
-        //private double SetTimeout()
-        //{
-        //SendLine("Setting timeout: {0} minutes", timeout);
-        //double savedtimeout = -1;
-        //if (crmsvc.Service is OrganizationServiceProxy orgsvcpxy)
-        //{
-        //    savedtimeout = orgsvcpxy.Timeout.TotalMinutes;
-        //    orgsvcpxy.Timeout = new TimeSpan(0, timeout, 0);
-        //}
-        //else if (crmsvc.Service is CrmServiceClient svcclient)
-        //{
-        //    savedtimeout = svcclient.OrganizationServiceProxy.Timeout.TotalMinutes;
-        //    svcclient.OrganizationServiceProxy.Timeout = new TimeSpan(0, timeout, 0);
-        //}
-        //return savedtimeout;
-        //}
 
         #endregion Private Methods
     }
