@@ -367,6 +367,9 @@ code layout and the import strategy in more detail.
 https://jonasr.app/shuffle/
 
 ## Articles
+https://biznamics.com/shuffle-guide/ <br/>
+A practical guide to moving Dataverse data with Shuffle: definitions, the XrmToolBox tools, batching, the behaviour changes in the 2026 release, and running the same definitions in Azure DevOps pipelines.
+
 https://jonasr.app/2017/04/devops-i/ <br/>
 These describe the outline of the tools in this repository.
 
